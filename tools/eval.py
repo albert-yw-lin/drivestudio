@@ -10,6 +10,7 @@ import argparse
 import torch
 from datasets.driving_dataset import DrivingDataset
 from utils.misc import import_str
+from utils.misc import export_gaussians_to_ply
 from models.trainers import BasicTrainer
 from models.video_utils import (
     render_images,
@@ -193,7 +194,7 @@ def main(args):
         scene_aabb=dataset.get_aabb().reshape(2, 3),
         device=device
     )
-    
+
     # Resume from checkpoint
     trainer.resume_from_checkpoint(
         ckpt_path=args.resume_from,
@@ -202,6 +203,22 @@ def main(args):
     logger.info(
         f"Resuming training from {args.resume_from}, starting at step {trainer.step}"
     )
+
+    # Export Gaussian models to PLY format
+    if args.export_ply:
+        logger.info("Exporting Gaussian models to PLY format...")
+        ply_output_dir = os.path.join(log_dir, "ply_exports")
+        os.makedirs(ply_output_dir, exist_ok=True)
+        
+        for model_name, model in trainer.models.items():
+            if hasattr(model, '_means'):  # Check if it's a Gaussian model
+                ply_filename = f"{model_name}_gaussians.ply"
+                try:
+                    export_gaussians_to_ply(model, ply_output_dir, ply_filename)
+                    logger.info(f"Exported {model_name} model to {os.path.join(ply_output_dir, ply_filename)}")
+                except Exception as e:
+                    logger.error(f"Failed to export {model_name} model: {e}")
+    
     
     if args.enable_viewer:
         # a simple viewer for background visualization
@@ -252,7 +269,8 @@ if __name__ == "__main__":
     parser.add_argument("--resume_from", default=None, help="path to checkpoint to resume from", type=str, required=True)
     parser.add_argument("--render_video_postfix", type=str, default=None, help="an optional postfix for video")    
     parser.add_argument("--save_catted_videos", type=bool, default=False, help="visualize lidar on image")
-    
+    parser.add_argument("--export_ply", action="store_true", help="export Gaussian models to PLY format")
+
     # viewer
     parser.add_argument("--enable_viewer", action="store_true", help="enable viewer")
     parser.add_argument("--viewer_port", type=int, default=8080, help="viewer port")

@@ -53,7 +53,14 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
     map_to_tensors = {}
     
     with torch.no_grad():
-        positions = model.means
+        # Handle different model types - use _means for VanillaGaussians
+        if hasattr(model, '_means'):
+            positions = model._means
+        elif hasattr(model, 'means'):
+            positions = model.means
+        else:
+            raise AttributeError("Model must have either '_means' or 'means' attribute")
+            
         if aabb is not None:
             aabb = aabb.to(positions.device)
             aabb_min, aabb_max = aabb[:3], aabb[3:]
@@ -69,27 +76,66 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
         map_to_tensors["positions"] = o3d.core.Tensor(positions, o3d.core.float32)
         map_to_tensors["normals"] = o3d.core.Tensor(np.zeros_like(positions), o3d.core.float32)
 
+        # Handle colors - use model.colors property for VanillaGaussians
         colors = model.colors[vis_mask].data.cpu().numpy()
         map_to_tensors["colors"] = (colors * 255).astype(np.uint8)
         for i in range(colors.shape[1]):
-            map_to_tensors[f"f_dc_{i}"] = colors[:, i : i + 1]
+            map_to_tensors[f"f_dc_{i}"] = o3d.core.Tensor(colors[:, i].reshape(-1, 1), o3d.core.float32)
 
-        shs = model.shs_rest[vis_mask].data.cpu().numpy()
-        if model.config.sh_degree > 0:
-            shs = shs.reshape((colors.shape[0], -1, 1))
-            for i in range(shs.shape[-1]):
-                map_to_tensors[f"f_rest_{i}"] = shs[:, i]
+        # Handle SH features - VanillaGaussians uses shs_rest property  
+        if hasattr(model, 'shs_rest'):
+            shs = model.shs_rest[vis_mask].data.cpu().numpy()
+        elif hasattr(model, '_features_rest'):
+            shs = model._features_rest[vis_mask].data.cpu().numpy()
+        else:
+            shs = np.zeros((colors.shape[0], 0, 3))
+            
+        # Check sh_degree from different possible locations
+        sh_degree = 0
+        if hasattr(model, 'sh_degree'):
+            sh_degree = model.sh_degree
+        elif hasattr(model, 'config') and hasattr(model.config, 'sh_degree'):
+            sh_degree = model.config.sh_degree
+        elif hasattr(model, 'ctrl_cfg') and hasattr(model.ctrl_cfg, 'sh_degree'):
+            sh_degree = model.ctrl_cfg.sh_degree
+            
+        if sh_degree > 0 and shs.shape[1] > 0:
+            shs = shs.reshape((colors.shape[0], -1, 3))
+            for i in range(shs.shape[1]):
+                for j in range(3):
+                    map_to_tensors[f"f_rest_{i*3+j}"] = o3d.core.Tensor(shs[:, i, j].reshape(-1, 1), o3d.core.float32)
 
-        map_to_tensors["opacity"] = model.opacities[vis_mask].data.cpu().numpy()
+        # Handle opacities
+        if hasattr(model, 'get_opacity'):
+            opacities = model.get_opacity[vis_mask].data.cpu().numpy()
+        elif hasattr(model, 'opacities'):
+            opacities = model.opacities[vis_mask].data.cpu().numpy()
+        else:
+            opacities = model._opacities[vis_mask].data.cpu().numpy()
+        map_to_tensors["opacity"] = o3d.core.Tensor(opacities.reshape(-1, 1), o3d.core.float32)
 
-        scales = model.scales[vis_mask].data.cpu().unsqueeze(-1).numpy()
-        for i in range(3):
-            map_to_tensors[f"scale_{i}"] = scales[:, i]
+        # Handle scales
+        if hasattr(model, 'get_scaling'):
+            scales = model.get_scaling[vis_mask].data.cpu().numpy()
+        elif hasattr(model, 'scales'):
+            scales = model.scales[vis_mask].data.cpu().numpy()
+        else:
+            scales = torch.exp(model._scales[vis_mask]).data.cpu().numpy()
+        
+        for i in range(scales.shape[1]):
+            map_to_tensors[f"scale_{i}"] = o3d.core.Tensor(scales[:, i].reshape(-1, 1), o3d.core.float32)
 
-        quats = model.quats[vis_mask].data.cpu().unsqueeze(-1).numpy()
+        # Handle quaternions
+        if hasattr(model, 'get_quats'):
+            quats = model.get_quats[vis_mask].data.cpu().numpy()
+        elif hasattr(model, 'quats'):
+            quats = model.quats[vis_mask].data.cpu().numpy()
+        else:
+            quats = model._quats[vis_mask].data.cpu().numpy()
+            quats = quats / np.linalg.norm(quats, axis=-1, keepdims=True)  # normalize
 
         for i in range(4):
-            map_to_tensors[f"rot_{i}"] = quats[:, i]
+            map_to_tensors[f"rot_{i}"] = o3d.core.Tensor(quats[:, i].reshape(-1, 1), o3d.core.float32)
 
     pcd = o3d.t.geometry.PointCloud(map_to_tensors)
     o3d.t.io.write_point_cloud(str(filename), pcd)
