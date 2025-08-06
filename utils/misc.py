@@ -61,18 +61,29 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
         else:
             raise AttributeError("Model must have either '_means' or 'means' attribute")
             
+        # if aabb is not None:
+        #     aabb = aabb.to(positions.device)
+        #     aabb_min, aabb_max = aabb[:3], aabb[3:]
+        #     aabb_center = (aabb_min + aabb_max) / 2
+        #     aabb_sacle_max = (aabb_max - aabb_min).max() / 2 * 1.1
+        #     vis_mask = torch.logical_and(positions >= aabb_min, positions < aabb_max).all(-1)
+        # else:
+        #     aabb_center = positions.mean(0)
+        #     aabb_sacle_max = (positions - aabb_center).abs().max() * 1.1
+        #     vis_mask = torch.ones_like(positions[:, 0], dtype=torch.bool)
+            
+        # positions = ((positions[vis_mask] - aabb_center) / aabb_sacle_max).cpu().numpy()
         if aabb is not None:
             aabb = aabb.to(positions.device)
             aabb_min, aabb_max = aabb[:3], aabb[3:]
             aabb_center = (aabb_min + aabb_max) / 2
             aabb_sacle_max = (aabb_max - aabb_min).max() / 2 * 1.1
             vis_mask = torch.logical_and(positions >= aabb_min, positions < aabb_max).all(-1)
+            positions = ((positions[vis_mask] - aabb_center) / aabb_sacle_max).cpu().numpy()
         else:
-            aabb_center = positions.mean(0)
-            aabb_sacle_max = (positions - aabb_center).abs().max() * 1.1
             vis_mask = torch.ones_like(positions[:, 0], dtype=torch.bool)
-            
-        positions = ((positions[vis_mask] - aabb_center) / aabb_sacle_max).cpu().numpy()
+            positions = positions[vis_mask].cpu().numpy()
+
         map_to_tensors["positions"] = o3d.core.Tensor(positions, o3d.core.float32)
         map_to_tensors["normals"] = o3d.core.Tensor(np.zeros_like(positions), o3d.core.float32)
 
