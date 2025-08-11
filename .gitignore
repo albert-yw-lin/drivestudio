@@ -188,3 +188,4 @@ cython_debug/
 local_scripts
 
 outputs/
+*.ply
