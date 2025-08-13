@@ -135,12 +135,32 @@ class VanillaGaussians(nn.Module):
                 return scaling
             else:
                 return torch.exp(self._scales)
+
+    @property
+    def get_scaling_raw(self):
+        if self.ball_gaussians:
+            return self._scales
+        else:
+            if self.gaussian_2d:
+                return self._scales[..., :2]
+            else:
+                return self._scales
+
     @property
     def get_opacity(self):
         return torch.sigmoid(self._opacities)
+
+    @property
+    def get_opacity_raw(self):
+        return self._opacities
+
     @property
     def get_quats(self):
         return self.quat_act(self._quats)
+
+    @property
+    def get_quats_raw(self):
+        return self._quats
     
     def quat_act(self, x: torch.Tensor) -> torch.Tensor:
         return x / x.norm(dim=-1, keepdim=True)

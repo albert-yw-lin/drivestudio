@@ -90,8 +90,9 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
         # Handle colors - use model.colors property for VanillaGaussians
         colors = model.colors[vis_mask].data.cpu().numpy()
         map_to_tensors["colors"] = (colors * 255).astype(np.uint8)
-        for i in range(colors.shape[1]):
-            map_to_tensors[f"f_dc_{i}"] = o3d.core.Tensor(colors[:, i].reshape(-1, 1), o3d.core.float32)
+        shs_0 = model.shs_0[vis_mask].data.cpu().numpy()
+        for i in range(shs_0.shape[1]):
+            map_to_tensors[f"f_dc_{i}"] = o3d.core.Tensor(shs_0[:, i].reshape(-1, 1), o3d.core.float32)
 
         # Handle SH features - VanillaGaussians uses shs_rest property  
         if hasattr(model, 'shs_rest'):
@@ -116,34 +117,37 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
                 for j in range(3):
                     map_to_tensors[f"f_rest_{i*3+j}"] = o3d.core.Tensor(shs[:, i, j].reshape(-1, 1), o3d.core.float32)
 
-        # Handle opacities
-        if hasattr(model, 'get_opacity'):
-            opacities = model.get_opacity[vis_mask].data.cpu().numpy()
-        elif hasattr(model, 'opacities'):
-            opacities = model.opacities[vis_mask].data.cpu().numpy()
-        else:
-            opacities = model._opacities[vis_mask].data.cpu().numpy()
+        # Handle opacities [have not yet implemented different cases]
+        # if hasattr(model, 'get_opacity'):
+        #     opacities = model.get_opacity_raw[vis_mask].data.cpu().numpy()
+        # elif hasattr(model, 'opacities'):
+        #     opacities = model.opacities[vis_mask].data.cpu().numpy()
+        # else:
+        #     opacities = model._opacities[vis_mask].data.cpu().numpy()
+        opacities = model.get_opacity_raw[vis_mask].data.cpu().numpy()
         map_to_tensors["opacity"] = o3d.core.Tensor(opacities.reshape(-1, 1), o3d.core.float32)
 
-        # Handle scales
-        if hasattr(model, 'get_scaling'):
-            scales = model.get_scaling[vis_mask].data.cpu().numpy()
-        elif hasattr(model, 'scales'):
-            scales = model.scales[vis_mask].data.cpu().numpy()
-        else:
-            scales = torch.exp(model._scales[vis_mask]).data.cpu().numpy()
+        # Handle scales [have not yet implemented different cases]
+        # if hasattr(model, 'get_scaling'):
+        #     scales = model.get_scaling[vis_mask].data.cpu().numpy()
+        # elif hasattr(model, 'scales'):
+        #     scales = model.scales[vis_mask].data.cpu().numpy()
+        # else:
+        #     scales = torch.exp(model._scales[vis_mask]).data.cpu().numpy()
+        scales = model.get_scaling_raw[vis_mask].data.cpu().numpy()
         
         for i in range(scales.shape[1]):
             map_to_tensors[f"scale_{i}"] = o3d.core.Tensor(scales[:, i].reshape(-1, 1), o3d.core.float32)
 
-        # Handle quaternions
-        if hasattr(model, 'get_quats'):
-            quats = model.get_quats[vis_mask].data.cpu().numpy()
-        elif hasattr(model, 'quats'):
-            quats = model.quats[vis_mask].data.cpu().numpy()
-        else:
-            quats = model._quats[vis_mask].data.cpu().numpy()
-            quats = quats / np.linalg.norm(quats, axis=-1, keepdims=True)  # normalize
+        # Handle quaternions [have not yet implemented different cases]
+        # if hasattr(model, 'get_quats'):
+        #     quats = model.get_quats[vis_mask].data.cpu().numpy()
+        # elif hasattr(model, 'quats'):
+        #     quats = model.quats[vis_mask].data.cpu().numpy()
+        # else:
+        #     quats = model._quats[vis_mask].data.cpu().numpy()
+        #     quats = quats / np.linalg.norm(quats, axis=-1, keepdims=True)  # normalize
+        quats = model.get_quats_raw[vis_mask].data.cpu().numpy()
 
         for i in range(4):
             map_to_tensors[f"rot_{i}"] = o3d.core.Tensor(quats[:, i].reshape(-1, 1), o3d.core.float32)
