@@ -5,7 +5,7 @@ dataset: nuscenes/6cams
 trainer:
   type: models.trainers.MultiTrainer
   optim:
-    num_iters: 30000
+    num_iters: 50000
     use_grad_scaler: false
     cache_buffer_freq: -1 # if > 0, use error based image sampler for training
   render:
