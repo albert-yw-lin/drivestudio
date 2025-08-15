@@ -69,6 +69,33 @@ class NuScenesCameraData(CameraData):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         
+    @staticmethod
+    def apply_calibration_offset(cam2world, cam_id):
+        """Apply camera-specific calibration error simulation."""
+        # Define different calibration errors for each camera (roll, pitch, yaw in radians)
+        # You can adjust these values to simulate different levels of calibration error
+        calibration_errors = {
+            0: [0.0175, 0.0175, 0.0175],   # CAM_FRONT: ~1 degree each axis
+            1: [0.0175, -0.0175, 0.0175], # CAM_FRONT_LEFT
+            2: [-0.0175, 0.0175, -0.0175], # CAM_FRONT_RIGHT  
+            3: [0.0175, 0.0175, -0.0175],  # CAM_BACK_LEFT
+            4: [-0.0175, -0.0175, 0.0175], # CAM_BACK_RIGHT
+            5: [0.0175, -0.0175, 0.0175]   # CAM_BACK
+        }
+        
+        # Get calibration error for this camera (default to no error if cam_id not found)
+        offset_angles = calibration_errors.get(int(cam_id), [0.0, 0.0, 0.0])
+        if any(abs(angle) > 1e-6 for angle in offset_angles):  # Only apply if non-zero
+            from scipy.spatial.transform import Rotation as R
+            offset_rotation = R.from_euler('xyz', offset_angles).as_matrix()
+            offset_transform = np.eye(4)
+            offset_transform[:3, :3] = offset_rotation
+            
+            # Apply offset: new_pose = original_pose @ offset
+            cam2world = cam2world @ offset_transform
+            
+        return cam2world
+        
     def load_calibrations(self):
         cam_to_worlds, intrinsics, distortions = [], [], []
         
@@ -105,6 +132,9 @@ class NuScenesCameraData(CameraData):
             
             # Align camera poses with the first camera pose
             cam2world = np.linalg.inv(camera_front_start) @ cam2world
+            
+            # Apply camera-specific calibration error simulation
+            # cam2world = self.apply_calibration_offset(cam2world, self.cam_id)
             
             # Convert to OpenCV coordinate system
             cam2world = cam2world @ OPENCV2DATASET
@@ -143,6 +173,9 @@ class NuScenesCameraData(CameraData):
             
             # Align camera poses with the first camera pose
             cam2world = np.linalg.inv(camera_front_start) @ cam2world
+            
+            # Apply camera-specific calibration error simulation
+            # cam2world = cls.apply_calibration_offset(cam2world, cam_id)
             
             # Convert to OpenCV coordinate system
             cam2world = cam2world @ OPENCV2DATASET
