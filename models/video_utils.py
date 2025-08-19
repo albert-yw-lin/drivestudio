@@ -420,7 +420,7 @@ def save_videos(
     return return_frame
 
 
-def render_novel_views(trainer, render_data: list, save_path: str, fps: int = 30) -> None:
+def render_novel_views(trainer, render_data: list, save_path: str, fps: int = 30, render_background_only: bool = False) -> None:
     """
     Perform rendering and save the result as a video.
     
@@ -448,11 +448,15 @@ def render_novel_views(trainer, render_data: list, save_path: str, fps: int = 30
                 camera_infos=frame_data["cam_infos"],
                 novel_view=True
             )
-            
-            # Extract RGB image and mask
-            rgb = outputs["rgb"].cpu().numpy().clip(
-                min=1.e-6, max=1-1.e-6
-            )
+            if not render_background_only:
+                # Extract RGB image and mask
+                rgb = outputs["rgb"].cpu().numpy().clip(
+                    min=1.e-6, max=1-1.e-6
+                )
+            else:
+                rgb = outputs["Background_rgb"].cpu().numpy().clip(
+                    min=1.e-6, max=1-1.e-6
+                )
             
             # Convert to uint8 and write to video
             rgb_uint8 = (rgb * 255).astype(np.uint8)

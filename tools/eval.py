@@ -167,7 +167,8 @@ def do_evaluation(
             save_path = os.path.join(video_output_dir, f"{traj_type}.mp4")
             render_novel_views(
                 trainer, render_data, save_path,
-                fps=render_novel_cfg.get("fps", cfg.render.fps)
+                fps=render_novel_cfg.get("fps", cfg.render.fps),
+                render_background_only=render_novel_cfg.get("render_background_only", False)
             )
             logger.info(f"Saved novel view video for trajectory type: {traj_type} to {save_path}")
             
