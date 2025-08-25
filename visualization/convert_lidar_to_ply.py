@@ -7,10 +7,10 @@ pose files, transforms all points to world coordinates using the same alignment 
 as the sourceloader, and saves them as a single .ply file for visualization.
 
 Usage:
-    python convert_lidar_to_ply.py --data_path /path/to/scene --output_path output.ply [--start_frame 0] [--end_frame -1]
+    python convert_lidar_to_ply.py --data_path /path/to/scene [--output_path output.ply] [--start_frame 0] [--end_frame -1]
 
 Example:
-    python convert_lidar_to_ply.py --data_path /data/nuscenes/processed/mini/000 --output_path scene_000.ply
+    python convert_lidar_to_ply.py --data_path /data/nuscenes/processed/mini/000
 """
 
 import argparse
@@ -21,13 +21,14 @@ import numpy as np
 from tqdm import trange
 
 
-def write_ply(points: np.ndarray, colors: Optional[np.ndarray], filename: str):
+def write_ply(points: np.ndarray, colors: Optional[np.ndarray], filename: str, intensities: Optional[np.ndarray] = None):
     """
     Write point cloud to PLY format.
     
     Args:
         points: (N, 3) array of 3D points
         colors: (N, 3) array of RGB colors (0-255), optional
+        intensities: (N,) array of per-point intensities, optional
         filename: output filename
     """
     N = points.shape[0]
@@ -42,11 +43,19 @@ def write_ply(points: np.ndarray, colors: Optional[np.ndarray], filename: str):
         "property float z",
     ]
     
-    if colors is not None:
+    # Choose attribute mode: RGB or single intensity (intensity takes precedence if provided)
+    use_intensity = intensities is not None
+    use_colors = (colors is not None) and not use_intensity
+    
+    if use_colors:
         header.extend([
             "property uchar red",
             "property uchar green", 
             "property uchar blue"
+        ])
+    elif use_intensity:
+        header.extend([
+            "property float intensity"
         ])
     
     header.append("end_header")
@@ -59,14 +68,16 @@ def write_ply(points: np.ndarray, colors: Optional[np.ndarray], filename: str):
         
         # Write points
         for i in range(N):
-            if colors is not None:
+            if use_colors:
                 f.write(f"{points[i, 0]:.6f} {points[i, 1]:.6f} {points[i, 2]:.6f} "
                        f"{int(colors[i, 0])} {int(colors[i, 1])} {int(colors[i, 2])}\n")
+            elif use_intensity:
+                f.write(f"{points[i, 0]:.6f} {points[i, 1]:.6f} {points[i, 2]:.6f} {float(intensities[i]):.6f}\n")
             else:
                 f.write(f"{points[i, 0]:.6f} {points[i, 1]:.6f} {points[i, 2]:.6f}\n")
 
 
-def load_lidar_frame(lidar_file: str, pose_file: str) -> np.ndarray:
+def load_lidar_frame(lidar_file: str, pose_file: str) -> tuple[np.ndarray, np.ndarray]:
     """
     Load a single LiDAR frame and transform to world coordinates.
     
@@ -75,11 +86,14 @@ def load_lidar_frame(lidar_file: str, pose_file: str) -> np.ndarray:
         pose_file: path to .txt file containing lidar-to-world transformation
         
     Returns:
-        (N, 3) array of world-coordinate points
+        Tuple of:
+        - (N, 3) array of world-coordinate points
+        - (N,) array of per-point intensities
     """
     # Load ego-frame LiDAR points
     lidar_info = np.fromfile(lidar_file, dtype=np.float32).reshape(-1, 4)
     lidar_points = lidar_info[:, :3]  # (N, 3)
+    intensities = lidar_info[:, 3]    # (N,)
     
     # Load lidar-to-world transformation matrix
     lidar_to_world = np.loadtxt(pose_file)  # (4, 4)
@@ -91,38 +105,15 @@ def load_lidar_frame(lidar_file: str, pose_file: str) -> np.ndarray:
     # Transform to world coordinates
     world_points = (lidar_to_world @ lidar_points_homo.T).T  # (N, 4)
     
-    return world_points[:, :3]  # Return only XYZ
-
-
-def generate_frame_colors(num_frames: int) -> np.ndarray:
-    """
-    Generate distinct colors for each frame.
-    
-    Args:
-        num_frames: number of frames
-        
-    Returns:
-        (num_frames, 3) array of RGB colors (0-255)
-    """
-    import matplotlib.cm as cm
-    
-    # Use a colormap to generate distinct colors
-    cmap = cm.get_cmap('tab10' if num_frames <= 10 else 'tab20')
-    colors = []
-    
-    for i in range(num_frames):
-        color = cmap(i / max(1, num_frames - 1))[:3]  # Get RGB, ignore alpha
-        colors.append([int(c * 255) for c in color])
-    
-    return np.array(colors)
-
+    return world_points[:, :3], intensities  # Return XYZ and intensity
 
 def convert_lidar_to_ply(
     data_path: str, 
     output_path: str,
     start_frame: int = 0,
     end_frame: int = -1,
-    color_by_frame: bool = True,
+    enable_color: bool = True,
+    intensity_only: bool = False,
     apply_alignment: bool = True
 ):
     """
@@ -133,7 +124,8 @@ def convert_lidar_to_ply(
         output_path: output .ply file path
         start_frame: first frame to include (default: 0)
         end_frame: last frame to include (default: -1 for all frames)
-        color_by_frame: whether to color points by frame number
+        enable_color: whether to write RGB colors derived from intensity (ignored if intensity_only)
+        intensity_only: whether to write a single float intensity per point instead of RGB
         apply_alignment: whether to apply first-camera alignment (same as sourceloader)
     """
     lidar_dir = os.path.join(data_path, "lidar")
@@ -179,14 +171,9 @@ def convert_lidar_to_ply(
     else:
         apply_alignment = False
     
-    # Generate colors for frames if needed
-    frame_colors = None
-    if color_by_frame:
-        frame_colors = generate_frame_colors(end_frame - start_frame)
-    
     # Process all frames
     all_points = []
-    all_colors = []
+    all_intensities = []
     total_points = 0
     
     for frame_idx in trange(start_frame, end_frame, desc="Processing frames"):
@@ -201,8 +188,8 @@ def convert_lidar_to_ply(
             print(f"Warning: Pose file not found: {pose_file}")
             continue
         
-        # Load and transform points
-        world_points = load_lidar_frame(lidar_file, pose_file)
+        # Load and transform points (and intensities)
+        world_points, intensities = load_lidar_frame(lidar_file, pose_file)
         
         # Apply alignment if requested (same as sourceloader)
         if apply_alignment and camera_front_start is not None:
@@ -212,12 +199,7 @@ def convert_lidar_to_ply(
             world_points = aligned_points[:, :3]
         
         all_points.append(world_points)
-        
-        # Assign colors if requested
-        if color_by_frame:
-            frame_color = frame_colors[frame_idx - start_frame]
-            point_colors = np.tile(frame_color, (world_points.shape[0], 1))
-            all_colors.append(point_colors)
+        all_intensities.append(intensities)
         
         total_points += world_points.shape[0]
     
@@ -226,7 +208,28 @@ def convert_lidar_to_ply(
     
     # Combine all points
     combined_points = np.vstack(all_points)
-    combined_colors = np.vstack(all_colors) if color_by_frame else None
+    combined_intensities = np.concatenate(all_intensities)
+
+    # Compute colors from intensity if enabled (unless intensity_only)
+    if enable_color and not intensity_only:
+        i_min = float(combined_intensities.min()) if combined_intensities.size > 0 else 0.0
+        i_max = float(combined_intensities.max()) if combined_intensities.size > 0 else 1.0
+
+        if i_max <= 1.5 and i_min >= 0.0:
+            # Typical normalized [0, 1]
+            gray = np.clip(combined_intensities, 0.0, 1.0) * 255.0
+        elif i_max <= 255.0 and i_min >= 0.0:
+            # Already in [0, 255]
+            gray = np.clip(combined_intensities, 0.0, 255.0)
+        else:
+            # Min-max normalize to [0, 255]
+            denom = max(1e-6, i_max - i_min)
+            gray = np.clip((combined_intensities - i_min) / denom, 0.0, 1.0) * 255.0
+
+        gray = gray.astype(np.uint8)
+        combined_colors = np.stack([gray, gray, gray], axis=1)
+    else:
+        combined_colors = None
     
     print(f"Total points: {total_points:,}")
     print(f"Point cloud bounds:")
@@ -236,33 +239,38 @@ def convert_lidar_to_ply(
     
     # Save as PLY
     print(f"Saving to {output_path}")
-    write_ply(combined_points, combined_colors, output_path)
+    write_ply(combined_points, combined_colors, output_path, intensities=combined_intensities if intensity_only else None)
     print("Done!")
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Convert NuScenes LiDAR .bin files to .ply")
+    parser = argparse.ArgumentParser(description="Convert NuScenes LiDAR .bin files to .ply (supports intensity-only or intensity-colored)")
     parser.add_argument("--data_path", required=True, 
                        help="Path to processed scene directory (containing lidar/ and lidar_pose/)")
-    parser.add_argument("--output_path", required=True,
-                       help="Output .ply file path")
+    parser.add_argument("--output_path", required=False, default=None,
+                       help="Output .ply file path (default: <data_path>/lidar.ply)")
     parser.add_argument("--start_frame", type=int, default=0,
                        help="First frame to include (default: 0)")
     parser.add_argument("--end_frame", type=int, default=-1,
                        help="Last frame to include (default: -1 for all)")
     parser.add_argument("--no_color", action="store_true",
-                       help="Don't color points by frame")
+                       help="Don't write colors (ignore intensity)")
+    parser.add_argument("--intensity_only", action="store_true",
+                       help="Write a single float intensity per point instead of RGB")
     parser.add_argument("--no_alignment", action="store_true",
                        help="Don't apply camera alignment (same as sourceloader)")
     
     args = parser.parse_args()
     
+    output_path = args.output_path or os.path.join(args.data_path, "lidar.ply")
+
     convert_lidar_to_ply(
         data_path=args.data_path,
-        output_path=args.output_path,
+        output_path=output_path,
         start_frame=args.start_frame,
         end_frame=args.end_frame,
-        color_by_frame=not args.no_color,
+        enable_color=not args.no_color,
+        intensity_only=args.intensity_only,
         apply_alignment=not args.no_alignment
     )
 
