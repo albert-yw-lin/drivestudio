@@ -1,9 +1,9 @@
-config_file=configs/omnire_extended_cam.yaml
+config_file=configs/omnire_extended_cam_static.yaml
 output_root=outputs
-project=nuscenes5
-expname=omnire_full_ssim_0_4
+project=nuscenes1
+expname=omnire_background
 dataset=nuscenes/6cams
-scene_idx=5
+scene_idx=1
 start_timestep=0 # start frame index for training
 end_timestep=-1 # end frame index, -1 for the last frame
 

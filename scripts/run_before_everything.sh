@@ -1,7 +1,25 @@
 export PYTHONPATH=$(pwd)
-export CUDA_HOME=/viscam/u/ywlin/miniconda3/envs/drivestudio # for viscam
-# export CUDA_HOME=/root/miniforge3/envs/drivestudio #NOTE: You need to set this to your CUDA installation path
-export LD_LIBRARY_PATH=$CUDA_HOME/lib/python3.9/site-packages/torch/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH
+
+# Check if we're in a conda/mamba environment and nvcc exists there
+if [ -n "$CONDA_PREFIX" ] && [ -f "$CONDA_PREFIX/bin/nvcc" ]; then
+    NVCC_PATH="$CONDA_PREFIX/bin/nvcc"
+    CUDA_PATH="$CONDA_PREFIX"
+    echo "Using CUDA from mamba environment: $CUDA_PATH"
+else
+    # Fallback to system nvcc
+    NVCC_PATH=$(which nvcc)
+    CUDA_PATH=$(dirname $(dirname $NVCC_PATH))
+    echo "Using system CUDA: $CUDA_PATH"
+fi
+
+export CUDA_PATH=$CUDA_PATH
+export CUDA_HOME=$CUDA_PATH
+
+# export CC=gcc-11
+# export CXX=g++-11
+
+# export LD_LIBRARY_PATH=$CUDA_HOME/lib/python3.9/site-packages/torch/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.9/site-packages/torch/lib:$CUDA_HOME/lib64:$CUDA_HOME/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 export PATH=$CUDA_HOME/bin:$PATH
-export LIBRARY_PATH=$CUDA_HOME/lib:$LIBRARY_PATH
+export LIBRARY_PATH=$CUDA_HOME/lib64:$CUDA_HOME/lib:$LIBRARY_PATH
 export CPATH=$CUDA_HOME/include:$CPATH
