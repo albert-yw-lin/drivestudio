@@ -7,15 +7,17 @@ trainer:
   optim:
     num_iters: 60000
     use_grad_scaler: false
-    cache_buffer_freq: 2000 # we use error based image sampler for training with more than 3 cameras
+    cache_buffer_freq: 2000
   render:
-    near_plane: 0.1 # near plane for rendering
-    far_plane: 10000000000.0 # far plane for rendering
-    antialiased: false # whether to use antialiasing for gaussian rendering, supported by gsplat kernel
-    packed: false # whether to use packed rendering, supported by gsplat kernel
-    absgrad: true # whether to use absolute gradient for rendering, supported by gsplat kernel
-    sparse_grad: false # whether to use sparse gradient for rendering, supported by gsplat kernel
-    batch_size: 1 # batch size for rendering, currently only support 1
+    near_plane: 0.1
+    far_plane: 10000000000.0
+    antialiased: false
+    packed: false
+    absgrad: true
+    sparse_grad: false
+    batch_size: 1
+    # 2DGS specific rendering settings
+    use_2dgs_renderer: true  # Flag to use 2DGS renderer
   losses:
     rgb:
       w: 0.8
@@ -23,22 +25,27 @@ trainer:
       w: 0.2
     mask:
       w: 0.05
-      opacity_loss_type: bce # choose from [bce, safe_bce]
+      opacity_loss_type: bce
     depth:
-      w: 0.01 # weight of depth loss
-      inverse_depth: False # whether to use inverse depth, NOTE that when set to True, must normalize=True
-      normalize: False # whether to normalize depth loss
-      loss_type: l1 # choose from ["l1", "l2"]
+      w: 0.01
+      inverse_depth: False
+      normalize: False
+      loss_type: l1
+    # 2DGS specific losses
+    normal_consistency:
+      w: 0.01  # Weight for normal consistency loss
+    depth_distortion:
+      w: 0.001  # Weight for depth distortion loss
     affine:
-      w: 0.00001 # weight of affine regularization
+      w: 0.00001
   res_schedule:
-    double_steps: 250 # training starts at 1/d resolution, every n steps this is doubled
-    downscale_times: 2 # at the beginning, resolution is 1/2^d, where d is this number
+    double_steps: 250
+    downscale_times: 2
   gaussian_optim_general_cfg:
     xyz:
       lr: 1.6e-04
       lr_final: 1.6e-06
-      scale_factor: scene_radius # str or float, if "scene_scale", scale the learning rate by the scene scale
+      scale_factor: scene_radius
     sh_dc:
       lr: 0.0025
     sh_rest:
@@ -50,39 +57,46 @@ trainer:
     rotation:
       lr: 0.001
   gaussian_ctrl_general_cfg:
-    gaussian_2d: true
-    warmup_steps: 500             # warmup steps for alpha
-    reset_alpha_interval: 4000    # reset alpha every n steps
-    refine_interval: 100          # refine gaussians every n steps
-    sh_degree_interval: 1000      # every n intervals turn on another sh degree
-    n_split_samples: 2            # number of samples to split gaussians into
-    # may differ in different models
-    reset_alpha_value: 0.01       # reset alpha to this value
-    densify_grad_thresh: 0.0003   # above this grad, gaussians are densified
-    densify_size_thresh: 0.002    # below this size, gaussians are *duplicated*, otherwise split
-    cull_alpha_thresh: 0.005      # threshold of opacity for culling gaussians
-    cull_scale_thresh: 0.5        # threshold of scale for culling gaussians
-    cull_screen_size: 0.15        # if a gaussian is more than this percent of screen space, cull it
-    split_screen_size: 0.05       # if a gaussian is more than this percent of screen space, split it
-    stop_screen_size_at: 5000     # stop culling/splitting at this step WRT screen size of gaussians
-    stop_split_at: 20000          # stop splitting at this step
-    sh_degree: 3                  # sh degree for gaussians
+    warmup_steps: 500
+    reset_alpha_interval: 4000
+    refine_interval: 100
+    sh_degree_interval: 1000
+    n_split_samples: 2
+    reset_alpha_value: 0.01
+    # 2DGS adapted thresholds
+    densify_grad_thresh: 0.0003  # Lower threshold for 2D Gaussians
+    densify_size_thresh: 0.003
+    cull_alpha_thresh: 0.005
+    cull_scale_thresh: 0.5
+    cull_screen_size: 0.15
+    split_screen_size: 0.05
+    stop_screen_size_at: 5000
+    stop_split_at: 20000
+    sh_degree: 3
 
 # ------------- Model ------------ #
 model:
   Background:
-    type: models.gaussians.VanillaGaussians
+    type: models.gaussians.SurfelGaussian  # Use our 2DGS model
     init:
       from_lidar:
         num_samples: 800_000
         return_color: True
       near_randoms: 100_000
       far_randoms: 100_000
+    ctrl:
+      gaussian_2d: true  # This will be forced to true in Gaussian2DGS
+      depth_ratio: 0  # 0 for mean depth (unbounded), 1 for median (bounded)
     reg:
+      # 2DGS specific regularizations
+      lambda_normal: 0.01  # Normal consistency regularization
+      lambda_distortion: 0.001  # Depth distortion regularization
       sharp_shape_reg:
         w: 1.
         step_interval: 10
-        max_gauss_ratio: 10.       # threshold of ratio of gaussian max to min scale before applying regularization loss from the PhysGaussian paper
+        max_gauss_ratio: 10.
+  
+  # models other than background remain the same. no 2dgs
   RigidNodes:
     type: models.nodes.RigidNodes
     init:
