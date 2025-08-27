@@ -5,7 +5,7 @@ import logging
 
 from datasets.driving_dataset import DrivingDataset
 from models.trainers.base import BasicTrainer, GSModelType
-from models.gaussians import PeriodicVibrationGaussians
+from models.gaussians import PeriodicVibrationGaussians, SurfelGaussians
 from utils.misc import import_str
 from utils.geometry import uniform_sample_sphere
 
@@ -28,6 +28,23 @@ class SingleTrainer(BasicTrainer):
     ):
         self.num_timesteps = num_timesteps
         super().__init__(**kwargs)
+
+        self._is_2dgs_model()
+
+    def _is_2dgs_model(self):
+        """
+        Detect if any model is using 2DGS (SurfelGaussian)
+        """
+        
+        for model_name, model_cfg in self.model_config.items():
+            if model_cfg.get("type", "").endswith("SurfelGaussians"):
+                logger.info(f"Detected 2DGS model: {model_name}")
+                assert self.render_cfg["use_2dgs"], "the yaml has to have this argument set to True"
+                assert "normal" in self.losses_dict
+                assert "distortion" in self.losses_dict
+                assert "densify_grad_thresh" in self.gaussian_ctrl_general_cfg
+                logger.info("Configured rendering for 2DGS")
+                break
 
     def register_normalized_timestamps(self, num_timestamps: int):
         self.normalized_timestamps = torch.linspace(0, 1, num_timestamps, device=self.device)

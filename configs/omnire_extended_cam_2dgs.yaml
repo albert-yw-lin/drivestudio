@@ -17,7 +17,7 @@ trainer:
     sparse_grad: false
     batch_size: 1
     # 2DGS specific rendering settings
-    use_2dgs_renderer: true  # Flag to use 2DGS renderer
+    use_2dgs: true  # Flag to use 2DGS renderer
   losses:
     rgb:
       w: 0.8
@@ -32,10 +32,12 @@ trainer:
       normalize: False
       loss_type: l1
     # 2DGS specific losses
-    normal_consistency:
-      w: 0.01  # Weight for normal consistency loss
-    depth_distortion:
-      w: 0.001  # Weight for depth distortion loss
+    normal:
+      w: 0.05          # Normal consistency loss weight
+      start_iter: 7000 # Start normal loss after this iteration
+    distortion:
+      w: 0.01          # Distortion regularization weight
+      start_iter: 3000 # Start distortion loss after this iteration
     affine:
       w: 0.00001
   res_schedule:
@@ -77,7 +79,7 @@ trainer:
 # ------------- Model ------------ #
 model:
   Background:
-    type: models.gaussians.SurfelGaussian  # Use our 2DGS model
+    type: models.gaussians.SurfelGaussians  # Use our 2DGS model
     init:
       from_lidar:
         num_samples: 800_000
@@ -85,7 +87,6 @@ model:
       near_randoms: 100_000
       far_randoms: 100_000
     ctrl:
-      gaussian_2d: true  # This will be forced to true in Gaussian2DGS
       depth_ratio: 0  # 0 for mean depth (unbounded), 1 for median (bounded)
     reg:
       # 2DGS specific regularizations
