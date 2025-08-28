@@ -63,7 +63,8 @@ RUN python3.9 -m pip install \
     tqdm \
     gdown \
     nerfview==0.0.3 \
-    lpips==0.1.4
+    lpips==0.1.4 \
+    jupyterlab
 
 # Set CUDA architectures for building extensions (avoid hardware detection issues)
 # CUDA 11.8 supports up to compute_89 (RTX 40xx series)
@@ -71,7 +72,8 @@ ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9"
 ENV FORCE_CUDA=1
 
 # External repos
-RUN python3.9 -m pip install git+https://github.com/nerfstudio-project/gsplat.git
+# RUN python3.9 -m pip install git+https://github.com/nerfstudio-project/gsplat.git
+RUN python3.9 -m pip install git+https://github.com/albert-yw-lin/gsplat_2dgs.git
 RUN python3.9 -m pip install git+https://github.com/facebookresearch/pytorch3d.git
 RUN python3.9 -m pip install git+https://github.com/NVlabs/nvdiffrast
 
