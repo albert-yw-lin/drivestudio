@@ -1,0 +1,14 @@
+services:
+  ds-2dgs:
+    build:
+      context: .
+      dockerfile: Dockerfile.2dgs
+    image: ds-2dgs
+    container_name: ds-2dgs
+    runtime: nvidia
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+    volumes:
+      - ~/drivestudio:/workspace   # mount local repo
+    working_dir: /workspace
+    tty: true

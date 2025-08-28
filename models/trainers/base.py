@@ -19,7 +19,10 @@ from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 from models.gaussians.basics import *
 
 # for 2dgs
-from gsplat.rendering import rasterization_2dgs, rasterization_2dgs_inria_wrapper
+try:
+    from gsplat.rendering import rasterization_2dgs, rasterization_2dgs_inria_wrapper
+except ImportError:
+    print("Did not import gsplat 2dgs")
 from models.gaussians.surfel import SurfelGaussians
 
 logger = logging.getLogger()
@@ -131,11 +134,12 @@ class BasicTrainer(nn.Module):
 
         # Add 2DGS configuration
         self.use_2dgs = self.render_cfg.get("use_2dgs", False)
-        
-        # 2DGS-specific loss configurations
-        self.normal_loss_cfg = self.losses.get("normal", {})
-        self.distortion_loss_cfg = self.losses.get("distortion", {})
-    
+
+        if self.use_2dgs:
+            # 2DGS-specific loss configurations
+            self.normal_loss_cfg = self.losses_dict.get("normal", {})
+            self.distortion_loss_cfg = self.losses_dict.get("distortion", {})
+
     @property
     def in_test_set(self):
         return self.cur_frame.item() in self.test_set_indices
@@ -461,7 +465,6 @@ class BasicTrainer(nn.Module):
             # colors = render_colors
             # depths = render_median.unsqueeze(-1) if render_median is not None else None
             rendered_rgb, rendered_depth = torch.split(render_colors, [3, 1], dim=-1)
-            
             if not return_info:
                 return (torch.clamp(rendered_rgb, max=1.0), rendered_depth, render_alphas[..., None], 
                        render_normals, normals_from_depth, render_distort, render_median)
@@ -471,6 +474,12 @@ class BasicTrainer(nn.Module):
         
         # render rgb and opacity with all 2DGS outputs
         rgb, depth, opacity, normals, normals_from_depth, distortion, median_depth, self.info = render_fn(return_info=True)
+        
+        # Handle gsplat 1.5+ where radii has shape (N, 2) instead of (N, 1)
+        # Take the maximum of the two dimensions to get back to 1D representation
+        if "radii" in self.info and self.info["radii"].dim() == 3 and self.info["radii"].shape[-1] == 2:
+            self.info["radii"] = torch.max(self.info["radii"], dim=-1)[0]
+        
         results = {
             "rgb_gaussians": rgb,
             "depth": depth, 
@@ -516,7 +525,6 @@ class BasicTrainer(nn.Module):
             
             assert renders.shape[-1] == 4, f"Must render rgb, depth and alpha"
             rendered_rgb, rendered_depth = torch.split(renders, [3, 1], dim=-1)
-            
             if not return_info:
                 return torch.clamp(rendered_rgb, max=1.0), rendered_depth, alphas[..., None]
             else:
@@ -524,6 +532,12 @@ class BasicTrainer(nn.Module):
         
         # render rgb and opacity
         rgb, depth, opacity, self.info = render_fn(return_info=True)
+        
+        # Handle gsplat 1.5+ where radii has shape (N, 2) instead of (N, 1)
+        # Take the maximum of the two dimensions to get back to 1D representation
+        if "radii" in self.info and self.info["radii"].dim() == 3 and self.info["radii"].shape[-1] == 2:
+            self.info["radii"] = torch.max(self.info["radii"], dim=-1)[0]
+        
         results = {
             "rgb_gaussians": rgb,
             "depth": depth, 
