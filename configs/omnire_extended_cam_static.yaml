@@ -5,7 +5,7 @@ dataset: nuscenes/6cams
 trainer:
   type: models.trainers.SingleTrainer
   optim:
-    num_iters: 30000
+    num_iters: 40000
     use_grad_scaler: false
     cache_buffer_freq: 2000 # we use error based image sampler for training with more than 3 cameras
   render:
@@ -66,7 +66,7 @@ trainer:
     cull_screen_size: 0.15        # if a gaussian is more than this percent of screen space, cull it
     split_screen_size: 0.05       # if a gaussian is more than this percent of screen space, split it
     stop_screen_size_at: 5000     # stop culling/splitting at this step WRT screen size of gaussians
-    stop_split_at: 20000          # stop splitting at this step
+    stop_split_at: 30000          # stop splitting at this step
     sh_degree: 3                  # sh degree for gaussians
 
 # ------------- Model ------------ #
@@ -75,10 +75,10 @@ model:
     type: models.gaussians.VanillaGaussians
     init:
       from_lidar:
-        num_samples: 800_000
+        num_samples: 900_000
         return_color: True
-      near_randoms: 100_000
-      far_randoms: 100_000
+      near_randoms: 50_000
+      far_randoms: 50_000
     reg:
       sharp_shape_reg:
         w: 1.

@@ -1,7 +1,7 @@
-config_file=configs/omnire_extended_cam_static.yaml
+config_file=configs/omnire_2dgs.yaml
 output_root=outputs
-project=test
-expname=test_delete
+project=nuscenes1
+expname=omnire_real_2dgs_buffer
 dataset=nuscenes/6cams
 scene_idx=1
 start_timestep=0 # start frame index for training
