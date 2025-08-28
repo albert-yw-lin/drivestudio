@@ -53,6 +53,10 @@ class SurfelGaussians(VanillaGaussians):
         """
         Initialize 2D Gaussian Splatting model.
         """
+
+        # Ensure 2D Gaussian mode is enabled for 2DGS
+        ctrl.gaussian_2d = True
+        
         super().__init__(
             class_name=class_name,
             ctrl=ctrl,

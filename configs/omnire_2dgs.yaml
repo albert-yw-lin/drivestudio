@@ -5,9 +5,9 @@ dataset: nuscenes/6cams
 trainer:
   type: models.trainers.SingleTrainer
   optim:
-    num_iters: 30000
+    num_iters: 60000
     use_grad_scaler: false
-    cache_buffer_freq: -1
+    cache_buffer_freq: 2000
   render:
     near_plane: 0.1
     far_plane: 10000000000.0
@@ -27,7 +27,7 @@ trainer:
       w: 0.05
       opacity_loss_type: bce
     depth:
-      w: 0.1
+      w: 0.01
       inverse_depth: False
       normalize: False
       loss_type: l1
@@ -130,7 +130,7 @@ render:
       - front_center_interp # type of trajectory for novel view synthesis
       # - s_curve
     fps: 24 # frames per second for novel view rendering
-    render_background_only: true
+    render_background_only: false # true is only for MultiTrainer
   vis_lidar: False # whether to visualize lidar points on ground truth images
   vis_sky: False # whether to include "rgb_sky" and "rgb_sky_blend" in rendered keys
   vis_error: False # whether to include "rgb_error_map" in rendered keys
@@ -139,5 +139,5 @@ render:
 logging:
   vis_freq: 2000 # how often to visualize training stats
   print_freq: 500 # how often to print training stats
-  saveckpt_freq: 20000 # how often to save checkpoints
+  saveckpt_freq: 15000 # how often to save checkpoints
   save_seperate_video: True # whether to save seperate videos for each scene

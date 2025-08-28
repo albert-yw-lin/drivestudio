@@ -374,16 +374,24 @@ class BasicTrainer(nn.Module):
     
             # collect gaussians
             gs["class_labels"] = torch.full((gs["_means"].shape[0],), self.gaussian_classes[class_name], device=self.device)
-            for k, _ in gs.items():
-                gs_dict[k].append(gs[k])
+            for k, v in gs.items():
+                if k not in gs_dict:
+                    gs_dict[k] = []
+                gs_dict[k].append(v)
         
         for k, v in gs_dict.items():
-            gs_dict[k] = torch.cat(v, dim=0)
+            if len(v) > 0:
+                gs_dict[k] = torch.cat(v, dim=0)
+            else:
+                gs_dict[k] = None
             
         # get the class labels
         self.pts_labels = gs_dict.pop("class_labels")
         if self.render_dynamic_mask:
             self.dynamic_pts_mask = (self.pts_labels != 0).float()
+
+        # Get normals if present (for 2DGS support)
+        normals = gs_dict.get("_normals", None)
 
         gaussians = dataclass_gs(
             _means=gs_dict["_means"],
@@ -391,6 +399,7 @@ class BasicTrainer(nn.Module):
             _quats=gs_dict["_quats"],
             _rgbs=gs_dict["_rgbs"],
             _opacities=gs_dict["_opacities"],
+            _normals=normals,
             detach_keys=[],    # if "means" in detach_keys, then the means will be detached
             extras=None        # to save some extra information (TODO) more flexible way
         )
@@ -427,7 +436,7 @@ class BasicTrainer(nn.Module):
         
         def render_fn(opacity_mask=None, return_info=False):
             # ensure 2DGS's scale is 3D
-            assert gs.scales.shape[1] == 3, "2DGS scales must be 3D, go verify"
+            assert gs.scales.shape[1] == 3, f"2DGS scales must be 3D, but instead got {gs.scales.shape[1]}. Go verify"
             (
                 render_colors,
                 render_alphas, 
@@ -455,7 +464,8 @@ class BasicTrainer(nn.Module):
             render_colors = render_colors[0]
             render_alphas = render_alphas[0].squeeze(-1)
             render_normals = render_normals[0]
-            normals_from_depth = normals_from_depth[0]
+            # normals_from_depth = normals_from_depth[0]
+            # NOTE: rasterization_2dgs's normals_from_depth does not have batch for some reason
             render_distort = render_distort[0]
             render_median = render_median[0]
             
@@ -735,7 +745,6 @@ class BasicTrainer(nn.Module):
             class_reg_loss = self.models[class_name].compute_reg_loss()
             for k, v in class_reg_loss.items():
                 loss_dict[f"{class_name}_{k}"] = v
-
         # Add 2DGS-specific losses
         if self.use_2dgs:
             # Normal consistency loss
@@ -774,7 +783,7 @@ class BasicTrainer(nn.Module):
         
         # Apply alpha masking if available
         if alpha is not None:
-            normals_from_depth = normals_from_depth * alpha.unsqueeze(-1)
+            normals_from_depth = normals_from_depth * alpha
         
         # Normalize
         normals = torch.nn.functional.normalize(normals, dim=-1)
