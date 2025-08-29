@@ -228,17 +228,17 @@ def main(args):
     # define render keys
     render_keys = [
         "gt_rgbs",
-        # "rgbs",
-        "Background_rgbs",
+        "rgbs",
+        # "Background_rgbs",
         # "RigidNodes_rgbs",
         # "DeformableNodes_rgbs",
         # "SMPLNodes_rgbs",
-        # "depths",
-        "Background_depths",
+        "depths",
+        # "Background_depths",
         # "RigidNodes_depths",
         # "DeformableNodes_depths",
         # "SMPLNodes_depths",
-        # "mask"
+        "mask"
     ]
     if cfg.render.vis_lidar:
         render_keys.insert(0, "lidar_on_images")
@@ -274,7 +274,7 @@ if __name__ == "__main__":
 
     # viewer
     parser.add_argument("--enable_viewer", action="store_true", help="enable viewer")
-    parser.add_argument("--viewer_port", type=int, default=8080, help="viewer port")
+    parser.add_argument("--viewer_port", type=int, default=8888, help="viewer port")
         
     # misc
     parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)

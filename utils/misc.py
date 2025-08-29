@@ -61,6 +61,9 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
         else:
             raise AttributeError("Model must have either '_means' or 'means' attribute")
             
+        # Check if this is a 2DGS model, specifically for SurfelGaussians
+        is_2dgs = hasattr(model, 'get_scaling_2d')
+
         # if aabb is not None:
         #     aabb = aabb.to(positions.device)
         #     aabb_min, aabb_max = aabb[:3], aabb[3:]
@@ -134,8 +137,11 @@ def export_gaussians_to_ply(model, path, name='point_cloud.ply', aabb=None):
         #     scales = model.scales[vis_mask].data.cpu().numpy()
         # else:
         #     scales = torch.exp(model._scales[vis_mask]).data.cpu().numpy()
-        scales = model.get_scaling_raw[vis_mask].data.cpu().numpy()
-        
+        if is_2dgs:
+            scales = model.get_scaling_2d_raw[vis_mask].data.cpu().numpy()  # [N, 2]
+        else:
+            scales = model.get_scaling_raw[vis_mask].data.cpu().numpy()
+
         for i in range(scales.shape[1]):
             map_to_tensors[f"scale_{i}"] = o3d.core.Tensor(scales[:, i].reshape(-1, 1), o3d.core.float32)
 

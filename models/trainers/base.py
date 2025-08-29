@@ -946,10 +946,15 @@ class BasicTrainer(nn.Module):
                 continue
 
             for k, _ in gs.items():
+                if k not in gs_dict:
+                    gs_dict[k] = []
                 gs_dict[k].append(gs[k])
         
         for k, v in gs_dict.items():
             gs_dict[k] = torch.cat(v, dim=0)
+
+        # Get normals if present (for 2DGS support)
+        normals = gs_dict.get("_normals", None)
 
         gs = dataclass_gs(
             _means=gs_dict["_means"],
@@ -957,24 +962,78 @@ class BasicTrainer(nn.Module):
             _quats=gs_dict["_quats"],
             _rgbs=gs_dict["_rgbs"],
             _opacities=gs_dict["_opacities"],
+            _normals=normals,
             detach_keys=[],
             extras=None
         )
         
-        render_colors, _, _ = rasterization(
-            means=gs.means,
-            quats=gs.quats,
-            scales=gs.scales,
-            opacities=gs.opacities.squeeze(),
-            colors=gs.rgbs,
-            viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
-            Ks=cam.Ks[None, ...],  # [C, 3, 3]
-            width=cam.W,
-            height=cam.H,
-            packed=self.render_cfg.packed,
-            absgrad=self.render_cfg.absgrad,
-            sparse_grad=self.render_cfg.sparse_grad,
-            rasterize_mode="antialiased" if self.render_cfg.antialiased else "classic",
-            radius_clip=4.0,  # skip GSs that have small image radius (in pixels)
-        )
-        return render_colors[0].cpu().numpy()
+        if self.use_2dgs:
+            # Use 2DGS rendering
+            # ensure 2DGS's scale is 3D
+            assert gs.scales.shape[1] == 3, f"2DGS scales must be 3D, but instead got {gs.scales.shape[1]}. Go verify"
+            (
+                render_colors,
+                render_alphas, 
+                render_normals,
+                normals_from_depth,
+                render_distort,
+                render_median,
+                info,
+            ) = rasterization_2dgs(
+                means=gs.means,
+                quats=gs.quats,
+                scales=gs.scales,
+                opacities=gs.opacities.squeeze(),
+                colors=gs.rgbs,
+                viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
+                Ks=cam.Ks[None, ...],  # [C, 3, 3]
+                width=cam.W,
+                height=cam.H,
+                packed=self.render_cfg.packed,
+                absgrad=self.render_cfg.absgrad,
+                sparse_grad=self.render_cfg.sparse_grad,
+                radius_clip=4.0,  # skip GSs that have small image radius (in pixels)
+            )
+            
+            render_colors = render_colors[0]
+            # Handle different 2DGS output formats
+            if render_colors.shape[-1] == 4:
+                # RGB + depth format
+                rendered_rgb, rendered_depth = torch.split(render_colors, [3, 1], dim=-1)
+                render_colors = torch.clamp(rendered_rgb, max=1.0)
+            elif render_colors.shape[-1] == 3:
+                # RGB only format, use median depth separately if available
+                render_colors = torch.clamp(render_colors, max=1.0)
+            else:
+                raise ValueError(f"Unexpected render_colors shape: {render_colors.shape}")
+        else:
+            # Use 3DGS rendering
+            render_colors, _, _ = rasterization(
+                means=gs.means,
+                quats=gs.quats,
+                scales=gs.scales,
+                opacities=gs.opacities.squeeze(),
+                colors=gs.rgbs,
+                viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
+                Ks=cam.Ks[None, ...],  # [C, 3, 3]
+                width=cam.W,
+                height=cam.H,
+                packed=self.render_cfg.packed,
+                absgrad=self.render_cfg.absgrad,
+                sparse_grad=self.render_cfg.sparse_grad,
+                rasterize_mode="antialiased" if self.render_cfg.antialiased else "classic",
+                radius_clip=4.0,  # skip GSs that have small image radius (in pixels)
+            )
+            render_colors = render_colors[0]
+            # Handle different 3DGS output formats
+            if render_colors.shape[-1] == 4:
+                # RGB + depth format
+                rendered_rgb, rendered_depth = torch.split(render_colors, [3, 1], dim=-1)
+                render_colors = torch.clamp(rendered_rgb, max=1.0)
+            elif render_colors.shape[-1] == 3:
+                # RGB only format
+                render_colors = torch.clamp(render_colors, max=1.0)
+            else:
+                raise ValueError(f"Unexpected render_colors shape: {render_colors.shape}")
+        
+        return render_colors.cpu().numpy()

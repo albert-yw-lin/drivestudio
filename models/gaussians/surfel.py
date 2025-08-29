@@ -130,6 +130,14 @@ class SurfelGaussians(VanillaGaussians):
         return torch.exp(self._scales)  # [N, 2]
     
     @property
+    def get_scaling_2d_raw(self):
+        """
+        Get 2D scaling parameters (major and minor axis of the disk).
+        """
+        return self._scales  # [N, 2]
+
+    
+    @property
     def get_normals(self):
         """
         Get surface normals for each Gaussian.
