@@ -1,7 +1,7 @@
 config_file=configs/omnire_2dgs.yaml
 output_root=outputs
 project=nuscenes1
-expname=omnire_real_2dgs_buffer
+expname=omnire_real_2dgs_fixed_sharp_shape_add_sparse_reg_nonstop_split_fullLiDARinit
 dataset=nuscenes/6cams
 scene_idx=1
 start_timestep=0 # start frame index for training

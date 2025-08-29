@@ -25,14 +25,14 @@ trainer:
       w: 0.05
       opacity_loss_type: bce # choose from [bce, safe_bce]
     depth:
-      w: 0.1 # weight of depth loss
-      inverse_depth: True # whether to use inverse depth, NOTE that when set to True, must normalize=True
-      normalize: True # whether to normalize depth loss
+      w: 0.01 # weight of depth loss
+      inverse_depth: False # whether to use inverse depth, NOTE that when set to True, must normalize=True
+      normalize: False # whether to normalize depth loss
       loss_type: l1 # choose from ["l1", "l2"]
-    opacity_entropy:
-      w: 0.05
-    inverse_depth_smoothness:
-      w: 0.001
+    # opacity_entropy:
+    #   w: 0.05
+    # inverse_depth_smoothness:
+    #   w: 0.001
   res_schedule:
     double_steps: 250 # training starts at 1/d resolution, every n steps this is doubled
     downscale_times: 2 # at the beginning, resolution is 1/2^d, where d is this number
@@ -75,10 +75,10 @@ model:
     type: models.gaussians.VanillaGaussians
     init:
       from_lidar:
-        num_samples: 900_000
+        num_samples: 800_000
         return_color: True
-      near_randoms: 50_000
-      far_randoms: 50_000
+      near_randoms: 100_000
+      far_randoms: 100_000
     reg:
       sharp_shape_reg:
         w: 1.
