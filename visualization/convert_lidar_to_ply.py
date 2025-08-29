@@ -258,7 +258,7 @@ def main():
     parser.add_argument("--intensity_only", action="store_true",
                        help="Write a single float intensity per point instead of RGB")
     parser.add_argument("--no_alignment", action="store_true",
-                       help="Don't apply camera alignment (same as sourceloader)")
+                       help="Don't apply camera alignment (sourceloader does)")
     
     args = parser.parse_args()
     
