@@ -458,6 +458,7 @@ class BasicTrainer(nn.Module):
                 packed=self.render_cfg.packed,
                 absgrad=self.render_cfg.absgrad,
                 sparse_grad=self.render_cfg.sparse_grad,
+                distloss=True, # default False, add this to enable distortion loss reg
                 **kwargs,
             )
 
@@ -693,6 +694,7 @@ class BasicTrainer(nn.Module):
             loss_dict.update({"depth_loss": depth_loss})
             
         # ----- reg loss -----
+        # NOTE: this is sort of similar to sparse_reg in each models.
         opacity_entropy_reg = self.losses_dict.get("opacity_entropy", None)
         if opacity_entropy_reg is not None:
             pred_opacity = torch.clamp(outputs["opacity"].squeeze(), 1e-6, 1 - 1e-6)

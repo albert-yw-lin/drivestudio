@@ -5,7 +5,7 @@ dataset: nuscenes/6cams
 trainer:
   type: models.trainers.SingleTrainer
   optim:
-    num_iters: 40000
+    num_iters: 30000
     use_grad_scaler: false
     cache_buffer_freq: 2000
   render:
@@ -65,14 +65,14 @@ trainer:
     sh_degree_interval: 1000
     n_split_samples: 2
     reset_alpha_value: 0.01
-    densify_grad_thresh: 0.0003  # Lower threshold for 2D Gaussians
-    densify_size_thresh: 0.003
+    densify_grad_thresh: 0.0002  # match gspalt 2dgs
+    densify_size_thresh: 0.01 # match gspalt 2dgs
     cull_alpha_thresh: 0.005
-    cull_scale_thresh: 0.5
+    cull_scale_thresh: 0.1  # match gspalt 2dgs
     cull_screen_size: 0.15
     split_screen_size: 0.05
     stop_screen_size_at: 5000
-    stop_split_at: 20000
+    stop_split_at: 30000
     sh_degree: 3
 
 # ------------- Model ------------ #
@@ -81,20 +81,17 @@ model:
     type: models.gaussians.SurfelGaussians  # Use our 2DGS model
     init:
       from_lidar:
-        num_samples: 800_000
+        num_samples: 1_000_000
         return_color: True
-      near_randoms: 100_000
-      far_randoms: 100_000
-    ctrl:
-      depth_ratio: 0  # 0 for mean depth (unbounded), 1 for median (bounded)
+      near_randoms: 0
+      far_randoms: 0
     reg:
-      # 2DGS specific regularizations
-      lambda_normal: 0.05  # Normal consistency regularization
-      lambda_distortion: 0.001  # Depth distortion regularization
       sharp_shape_reg:
         w: 1.
         step_interval: 10
         max_gauss_ratio: 10.
+      sparse_reg:
+        w: 0.002
   Sky:
     type: models.modules.EnvLight
     params:
