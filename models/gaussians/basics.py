@@ -10,8 +10,23 @@ from sklearn.neighbors import NearestNeighbors
 from pytorch3d.transforms import matrix_to_quaternion
 
 from gsplat.rendering import rasterization
-from gsplat.cuda_legacy._wrapper import num_sh_bases
-from gsplat.cuda_legacy._torch_impl import quat_to_rotmat
+try:
+    from gsplat.cuda_legacy._wrapper import num_sh_bases
+except ImportError:
+    def num_sh_bases(degree: int): # exactly the same as legacy
+        if degree == 0:
+            return 1
+        if degree == 1:
+            return 4
+        if degree == 2:
+            return 9
+        if degree == 3:
+            return 16
+        return 25
+try:
+    from gsplat.cuda_legacy._torch_impl import quat_to_rotmat
+except ImportError: 
+    from gsplat.cuda._torch_impl import _quat_to_rotmat as quat_to_rotmat
 from gsplat.cuda._wrapper import spherical_harmonics
 
 def interpolate_quats(q1, q2, fraction=0.5):

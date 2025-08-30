@@ -1,0 +1,142 @@
+seed: 0
+dataset: nuscenes/6cams
+
+# ------------- Trainer ------------ #
+trainer:
+  type: models.trainers.SingleTrainer
+  optim:
+    num_iters: 30000
+    use_grad_scaler: false
+    cache_buffer_freq: -1
+  render:
+    near_plane: 0.1
+    far_plane: 10000000000.0
+    antialiased: false
+    packed: false
+    absgrad: true
+    sparse_grad: false
+    batch_size: 1
+    # 2DGS specific rendering settings
+    use_2dgs_renderer: true  # Flag to use 2DGS renderer
+  losses:
+    rgb:
+      w: 0.8
+    ssim:
+      w: 0.2
+    mask:
+      w: 0.05
+      opacity_loss_type: bce
+    depth:
+      w: 0.1
+      inverse_depth: False
+      normalize: False
+      loss_type: l1
+    # 2DGS specific losses
+    normal_consistency:
+      w: 0.01  # Weight for normal consistency loss
+    depth_distortion:
+      w: 0.001  # Weight for depth distortion loss
+    affine:
+      w: 0.00001
+  res_schedule:
+    double_steps: 250
+    downscale_times: 2
+  gaussian_optim_general_cfg:
+    xyz:
+      lr: 1.6e-04
+      lr_final: 1.6e-06
+      scale_factor: scene_radius
+    sh_dc:
+      lr: 0.0025
+    sh_rest:
+      lr: 0.000125
+    opacity:
+      lr: 0.05
+    scaling:
+      lr: 0.005
+    rotation:
+      lr: 0.001
+  gaussian_ctrl_general_cfg:
+    warmup_steps: 500
+    reset_alpha_interval: 4000
+    refine_interval: 100
+    sh_degree_interval: 1000
+    n_split_samples: 2
+    reset_alpha_value: 0.01
+    # 2DGS adapted thresholds
+    densify_grad_thresh: 0.0003  # Lower threshold for 2D Gaussians
+    densify_size_thresh: 0.003
+    cull_alpha_thresh: 0.005
+    cull_scale_thresh: 0.5
+    cull_screen_size: 0.15
+    split_screen_size: 0.05
+    stop_screen_size_at: 5000
+    stop_split_at: 20000
+    sh_degree: 3
+
+# ------------- Model ------------ #
+model:
+  Background:
+    type: models.gaussians.SurfelGaussian  # Use our 2DGS model
+    init:
+      from_lidar:
+        num_samples: 800_000
+        return_color: True
+      near_randoms: 100_000
+      far_randoms: 100_000
+    ctrl:
+      gaussian_2d: true  # This will be forced to true in Gaussian2DGS
+      depth_ratio: 0  # 0 for mean depth (unbounded), 1 for median (bounded)
+    reg:
+      # 2DGS specific regularizations
+      lambda_normal: 0.01  # Normal consistency regularization
+      lambda_distortion: 0.001  # Depth distortion regularization
+      sharp_shape_reg:
+        w: 1.
+        step_interval: 10
+        max_gauss_ratio: 10.
+  Sky:
+    type: models.modules.EnvLight
+    params:
+      resolution: 1024
+    optim:
+      all:
+        lr: 0.01
+  Affine:
+    type: models.modules.AffineTransform
+    params:
+      embedding_dim: 4
+      base_mlp_layer_width: 64
+      pixel_affine: False
+    optim:
+      all:
+        lr: 1.0e-5
+        weight_decay: 1.0e-6
+  CamPose:
+    type: models.modules.CameraOptModule
+    optim:
+      all:
+        lr: 1.0e-5
+        weight_decay: 1.0e-6
+
+# ------------- render ------------ #
+render:
+  fps: 10 # frames per second for the main rendered output
+  render_full: True # whether to render full resolution videos
+  render_test: True # whether to render test set
+  render_novel: 
+    traj_types:
+      - front_center_interp # type of trajectory for novel view synthesis
+      # - s_curve
+    fps: 24 # frames per second for novel view rendering
+    render_background_only: true
+  vis_lidar: False # whether to visualize lidar points on ground truth images
+  vis_sky: False # whether to include "rgb_sky" and "rgb_sky_blend" in rendered keys
+  vis_error: False # whether to include "rgb_error_map" in rendered keys
+
+# ------------- logging ------------ #
+logging:
+  vis_freq: 2000 # how often to visualize training stats
+  print_freq: 500 # how often to print training stats
+  saveckpt_freq: 20000 # how often to save checkpoints
+  save_seperate_video: True # whether to save seperate videos for each scene
