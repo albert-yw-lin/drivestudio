@@ -19,7 +19,10 @@ export CUDA_HOME=$CUDA_PATH
 # export CXX=g++-11
 
 # export LD_LIBRARY_PATH=$CUDA_HOME/lib/python3.9/site-packages/torch/lib:$CUDA_HOME/lib:$LD_LIBRARY_PATH
-export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.9/site-packages/torch/lib:$CUDA_HOME/lib64:$CUDA_HOME/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+# export LD_LIBRARY_PATH=$CONDA_PREFIX/lib/python3.9/site-packages/torch/lib:$CUDA_HOME/lib64:$CUDA_HOME/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+# Keep LD paths minimal and avoid leaking other envs' Torch libs
+export LD_LIBRARY_PATH=$CUDA_HOME/lib64:$CUDA_HOME/lib:/usr/lib/x86_64-linux-gnu
 export PATH=$CUDA_HOME/bin:$PATH
 export LIBRARY_PATH=$CUDA_HOME/lib64:$CUDA_HOME/lib:$LIBRARY_PATH
 export CPATH=$CUDA_HOME/include:$CPATH
+export TF_FORCE_GPU_ALLOW_GROWTH=true
