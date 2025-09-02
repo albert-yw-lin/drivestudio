@@ -171,6 +171,8 @@ def do_evaluation(
                 render_background_only=render_novel_cfg.get("render_background_only", False)
             )
             logger.info(f"Saved novel view video for trajectory type: {traj_type} to {save_path}")
+
+    # TODO: add mesh reconstruction from 2dgs
             
 def main(args):
     log_dir = os.path.dirname(args.resume_from)

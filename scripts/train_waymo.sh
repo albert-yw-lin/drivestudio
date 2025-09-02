@@ -1,7 +1,7 @@
-config_file=configs/omnire_extended_cam.yaml
+config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
 output_root=outputs
 project=waymo071
-expname=omnire_extended_cam
+expname=omnire_extended_cam_2dgs_background_only
 dataset=waymo/5cams
 scene_idx=71
 start_timestep=0 # start frame index for training
