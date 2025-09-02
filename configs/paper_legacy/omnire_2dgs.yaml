@@ -88,7 +88,7 @@ model:
         step_interval: 10
         max_gauss_ratio: 10.       # threshold of ratio of gaussian max to min scale before applying regularization loss from the PhysGaussian paper
   RigidNodes:
-    type: models.nodes.RigidNodes
+    type: models.nodes.RigidNodes2DGS
     init:
       instance_max_pts: 5000
       only_moving: true

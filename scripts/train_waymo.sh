@@ -1,9 +1,9 @@
 config_file=configs/omnire_extended_cam.yaml
 output_root=outputs
-project=waymo552
+project=waymo071
 expname=omnire_extended_cam
 dataset=waymo/5cams
-scene_idx=552
+scene_idx=71
 start_timestep=0 # start frame index for training
 end_timestep=-1 # end frame index, -1 for the last frame
 
