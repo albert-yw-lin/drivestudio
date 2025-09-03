@@ -173,6 +173,63 @@ def do_evaluation(
             logger.info(f"Saved novel view video for trajectory type: {traj_type} to {save_path}")
 
     # TODO: add mesh reconstruction from 2dgs
+def extract_background_mesh(
+    trainer,
+    dataset,
+    save_dir: str,
+    num_views: int = None,
+    voxel_size: float = None,
+    depth_threshold: float = None
+):
+    """Extract mesh specifically from Background gaussians"""
+    from utils.mesh_extractor import BackgroundMeshExtractor
+    import open3d as o3d
+    
+    # Check if trainer is MultiTrainer and has Background model
+    if not hasattr(trainer, 'gaussian_classes'):
+        logger.warning("Trainer does not have gaussian_classes, skipping mesh extraction")
+        return None
+    
+    if "Background" not in trainer.gaussian_classes:
+        logger.warning("No Background model found in trainer, skipping mesh extraction")
+        return None
+    
+    logger.info("Extracting mesh from Background gaussians...")
+    
+    # Create mesh extractor
+    extractor = BackgroundMeshExtractor(scene_scale=trainer.scene_radius)
+    
+    # Extract depth maps from Background only
+    extractor.extract_background_depths_from_trainer(
+        trainer=trainer,
+        dataset=dataset,
+        num_views=num_views,
+        camera_downscale=2
+    )
+    
+    # Extract mesh using TSDF
+    mesh = extractor.extract_mesh_tsdf(
+        voxel_size=voxel_size,
+        depth_threshold=depth_threshold  # Can filter out far depths (sky)
+    )
+    
+    # Post-process mesh
+    mesh_clean = extractor.post_process_mesh(mesh, min_cluster_size=50)
+    
+    # Save meshes
+    os.makedirs(save_dir, exist_ok=True)
+    mesh_path = os.path.join(save_dir, "background_mesh_raw.ply")
+    mesh_clean_path = os.path.join(save_dir, "background_mesh_clean.ply")
+    
+    o3d.io.write_triangle_mesh(mesh_path, mesh)
+    o3d.io.write_triangle_mesh(mesh_clean_path, mesh_clean)
+    
+    logger.info(f"Saved raw Background mesh to {mesh_path}")
+    logger.info(f"Saved cleaned Background mesh to {mesh_clean_path}")
+    logger.info(f"Raw mesh: {len(mesh.vertices)} vertices, {len(mesh.triangles)} faces")
+    logger.info(f"Clean mesh: {len(mesh_clean.vertices)} vertices, {len(mesh_clean.triangles)} faces")
+    
+    return mesh_clean
             
 def main(args):
     log_dir = os.path.dirname(args.resume_from)
@@ -206,6 +263,18 @@ def main(args):
     logger.info(
         f"Resuming training from {args.resume_from}, starting at step {trainer.step}"
     )
+
+    # Extract Background mesh if requested
+    if args.extract_mesh:
+        mesh_dir = os.path.join(log_dir, "mesh_exports")
+        extract_background_mesh(
+            trainer=trainer,
+            dataset=dataset,
+            save_dir=mesh_dir,
+            num_views=args.mesh_num_views,
+            voxel_size=args.mesh_voxel_size,
+            depth_threshold=args.mesh_depth_threshold
+        )
 
     # Export Gaussian models to PLY format
     if args.export_ply:
@@ -274,6 +343,12 @@ if __name__ == "__main__":
     parser.add_argument("--save_catted_videos", type=bool, default=False, help="visualize lidar on image")
     parser.add_argument("--export_ply", action="store_true", help="export Gaussian models to PLY format")
 
+    # mesh extraction
+    parser.add_argument("--extract_mesh", action="store_true", help="Extract mesh from Background gaussians using TSDF")
+    parser.add_argument("--mesh_num_views", type=int, default=None, help="Number of views for mesh extraction")
+    parser.add_argument("--mesh_voxel_size", type=float, default=None, help="Voxel size for TSDF (auto if None)")
+    parser.add_argument("--mesh_depth_threshold", type=float, default=None, help="Max depth to consider (filters sky)")
+    
     # viewer
     parser.add_argument("--enable_viewer", action="store_true", help="enable viewer")
     parser.add_argument("--viewer_port", type=int, default=8888, help="viewer port")
