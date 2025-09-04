@@ -346,7 +346,7 @@ if __name__ == "__main__":
     # mesh extraction
     parser.add_argument("--extract_mesh", action="store_true", help="Extract mesh from Background gaussians using TSDF")
     parser.add_argument("--mesh_num_views", type=int, default=None, help="Number of views for mesh extraction")
-    parser.add_argument("--mesh_voxel_size", type=float, default=None, help="Voxel size for TSDF (auto if None)")
+    parser.add_argument("--mesh_voxel_size", type=float, default=0.05, help="Voxel size for TSDF (auto if None)")
     parser.add_argument("--mesh_depth_threshold", type=float, default=None, help="Max depth to consider (filters sky)")
     
     # viewer

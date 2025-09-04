@@ -39,7 +39,7 @@ class BackgroundMeshExtractor:
         original_render_each_class = trainer.render_each_class
         trainer.render_each_class = True
         trainer.set_eval()
-        
+
         # Sample views evenly from the dataset
         total_views = len(dataset.full_image_set)
         step = max(1, total_views // num_views) if num_views is not None else 1
@@ -137,7 +137,7 @@ class BackgroundMeshExtractor:
     @torch.no_grad()
     def extract_mesh_tsdf(
         self,
-        voxel_size: float = None,
+        voxel_size: float = 0.05, # emperically tuned number
         sdf_trunc: float = None,
         depth_trunc: float = None,
         depth_threshold: float = None
@@ -152,12 +152,13 @@ class BackgroundMeshExtractor:
         """
         
         # Auto-compute parameters if not provided
-        if voxel_size is None:
-            voxel_size = self.radius * 2 / 512
+        # breakpoint()
+        # if voxel_size is None:
+        #     voxel_size = self.radius * 2 / 512
         if sdf_trunc is None:
             sdf_trunc = voxel_size * 5
         if depth_trunc is None:
-            depth_trunc = self.radius * 2
+            depth_trunc = self.radius*2
             
         print(f"TSDF Fusion Parameters:")
         print(f"  voxel_size: {voxel_size:.4f}")
