@@ -1,9 +1,9 @@
-config_file=configs/omnire_extended_cam.yaml
+config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
 output_root=outputs
-project=pandaset008
-expname=omnire_extended_cam
+project=pandaset001
+expname=omnire_extended_cam_3dgs_background_only
 dataset=pandaset/6cams
-scene_idx=8
+scene_idx=1
 start_timestep=0 # start frame index for training
 end_timestep=-1 # end frame index, -1 for the last frame
 
