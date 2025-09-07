@@ -3,7 +3,7 @@ dataset: waymo/3cams
 
 # ------------- Trainer ------------ #
 trainer:
-  type: models.trainers.SingleTrainer
+  type: models.trainers.SingleTrainerBackground
   optim:
     num_iters: 40000
     use_grad_scaler: false
