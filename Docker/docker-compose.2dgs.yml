@@ -11,9 +11,13 @@ services:
     ports:
       - "8888:8888"  # Jupyter Lab port mapping
     volumes:
-      - ~/drivestudio:/workspace   # mount local repo
+      - /home/yanjieze2/ywlin/drivestudio:/workspace   # mount local repo
     working_dir: /workspace
     tty: true
+    command:
+      - bash
+      - -lc
+      - jupyter lab --ip=0.0.0.0 --port=8888 --no-browser --allow-root --ServerApp.token='' --ServerApp.password=''
 
 # Build docker:
 # docker compose -f Docker/docker-compose.2dgs.yml build
