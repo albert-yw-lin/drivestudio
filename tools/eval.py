@@ -298,49 +298,50 @@ def main(args):
         #         except Exception as e:
         #             logger.error(f"Failed to export {model_name} model: {e}")
     
-    
-    if args.enable_viewer:
-        # a simple viewer for background visualization
-        trainer.init_viewer(port=args.viewer_port)
-    
-    # define render keys
-    render_keys = [
-        "gt_rgbs",
-        "rgbs",
-        # "Background_rgbs",
-        # "RigidNodes_rgbs",
-        # "DeformableNodes_rgbs",
-        # "SMPLNodes_rgbs",
-        "depths",
-        # "Background_depths",
-        # "RigidNodes_depths",
-        # "DeformableNodes_depths",
-        # "SMPLNodes_depths",
-        "mask"
-    ]
-    if cfg.render.vis_lidar:
-        render_keys.insert(0, "lidar_on_images")
-    if cfg.render.vis_sky:
-        render_keys += ["rgb_sky_blend", "rgb_sky"]
-    if cfg.render.vis_error:
-        render_keys.insert(render_keys.index("rgbs") + 1, "rgb_error_maps")
-    
-    if args.save_catted_videos:
-        cfg.logging.save_seperate_video = False
-    
-    do_evaluation(
-        step=trainer.step,
-        cfg=cfg,
-        trainer=trainer,
-        dataset=dataset,
-        render_keys=render_keys,
-        args=args,
-        post_fix="_eval"
-    )
-    
-    if args.enable_viewer:
-        print("Viewer running... Ctrl+C to exit.")
-        time.sleep(1000000)
+    if args.render_video:
+        logger.info("Rendering video from Gaussian models...")
+        if args.enable_viewer:
+            # a simple viewer for background visualization
+            trainer.init_viewer(port=args.viewer_port)
+        
+        # define render keys
+        render_keys = [
+            "gt_rgbs",
+            "rgbs",
+            # "Background_rgbs",
+            # "RigidNodes_rgbs",
+            # "DeformableNodes_rgbs",
+            # "SMPLNodes_rgbs",
+            "depths",
+            # "Background_depths",
+            # "RigidNodes_depths",
+            # "DeformableNodes_depths",
+            # "SMPLNodes_depths",
+            "mask"
+        ]
+        if cfg.render.vis_lidar:
+            render_keys.insert(0, "lidar_on_images")
+        if cfg.render.vis_sky:
+            render_keys += ["rgb_sky_blend", "rgb_sky"]
+        if cfg.render.vis_error:
+            render_keys.insert(render_keys.index("rgbs") + 1, "rgb_error_maps")
+        
+        if args.save_catted_videos:
+            cfg.logging.save_seperate_video = False
+        
+        do_evaluation(
+            step=trainer.step,
+            cfg=cfg,
+            trainer=trainer,
+            dataset=dataset,
+            render_keys=render_keys,
+            args=args,
+            post_fix="_eval"
+        )
+        
+        if args.enable_viewer:
+            print("Viewer running... Ctrl+C to exit.")
+            time.sleep(1000000)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Train Gaussian Splatting for a single scene")    
@@ -349,6 +350,7 @@ if __name__ == "__main__":
     parser.add_argument("--render_video_postfix", type=str, default=None, help="an optional postfix for video")    
     parser.add_argument("--save_catted_videos", type=bool, default=False, help="visualize lidar on image")
     parser.add_argument("--export_ply", action="store_true", help="export Gaussian models to PLY format")
+    parser.add_argument("--render_video", action="store_true", help="render video from Gaussian models")
 
     # mesh extraction
     parser.add_argument("--extract_mesh", action="store_true", help="Extract mesh from Background gaussians using TSDF")
