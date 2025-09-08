@@ -172,7 +172,6 @@ def do_evaluation(
             )
             logger.info(f"Saved novel view video for trajectory type: {traj_type} to {save_path}")
 
-    # TODO: add mesh reconstruction from 2dgs
 def extract_background_mesh(
     trainer,
     dataset,
@@ -276,20 +275,25 @@ def main(args):
             depth_threshold=args.mesh_depth_threshold
         )
 
-    # Export Gaussian models to PLY format
+    # Export Background Gaussian to PLY format
     if args.export_ply:
-        logger.info("Exporting Gaussian models to PLY format...")
+        logger.info("Exporting Background Gaussian to PLY format...")
         ply_output_dir = os.path.join(log_dir, "ply_exports")
         os.makedirs(ply_output_dir, exist_ok=True)
-        
-        for model_name, model in trainer.models.items():
-            if hasattr(model, '_means'):  # Check if it's a Gaussian model
-                ply_filename = f"{model_name}_gaussians.ply"
-                try:
-                    export_gaussians_to_ply(model, ply_output_dir, ply_filename)
-                    logger.info(f"Exported {model_name} model to {os.path.join(ply_output_dir, ply_filename)}")
-                except Exception as e:
-                    logger.error(f"Failed to export {model_name} model: {e}")
+
+        model = trainer.models["Background"]
+        export_gaussians_to_ply(model, ply_output_dir, name = "background.ply")
+        logger.info(f"Exported background model to {ply_output_dir}/background.ply")
+
+        # Use this if you were to export all Gaussian models in the trainer
+        # for model_name, model in trainer.models.items():
+        #     if hasattr(model, '_means'):  # Check if it's a Gaussian model
+        #         ply_filename = f"{model_name}_gaussians.ply"
+        #         try:
+        #             export_gaussians_to_ply(model, ply_output_dir, ply_filename)
+        #             logger.info(f"Exported {model_name} model to {os.path.join(ply_output_dir, ply_filename)}")
+        #         except Exception as e:
+        #             logger.error(f"Failed to export {model_name} model: {e}")
     
     
     if args.enable_viewer:
