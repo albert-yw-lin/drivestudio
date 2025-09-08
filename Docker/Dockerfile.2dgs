@@ -55,7 +55,8 @@ RUN python3.9 -m pip install \
     imageio-ffmpeg \
     scikit-image==0.20.0 \
     opencv-python \
-    open3d==0.16.0 \
+    # open3d==0.16.0 \ we need to use 0.14.1 for tsdf integration on cuda (TSDFVoxelGrid class is gone after 0.14.1)
+    open3d==0.14.1 \
     pyquaternion==0.9.9 \
     chumpy \
     numpy==1.23.1 \

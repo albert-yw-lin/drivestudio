@@ -33,7 +33,7 @@ class SingleTrainerBackground(BasicTrainer):
         # align behavior with MultiTrainer so external utilities can toggle it
         self.render_each_class = True
 
-        self._is_2dgs_model()
+        self.use_2dgs = self._is_2dgs_model()
 
     def _is_2dgs_model(self):
         """
@@ -48,7 +48,8 @@ class SingleTrainerBackground(BasicTrainer):
                 # assert "distortion" in self.losses_dict
                 assert "densify_grad_thresh" in self.gaussian_ctrl_general_cfg
                 logger.info("Configured rendering for 2DGS")
-                break
+                return True
+        return False
 
     def register_normalized_timestamps(self, num_timestamps: int):
         self.normalized_timestamps = torch.linspace(0, 1, num_timestamps, device=self.device)
@@ -244,7 +245,10 @@ class SingleTrainerBackground(BasicTrainer):
         if not self.training and self.render_each_class:
             with torch.no_grad():
                 gaussian_mask = self.pts_labels == self.gaussian_classes["Background"]
-                sep_rgb, sep_depth, sep_opacity = render_fn(gaussian_mask)
+                if self.use_2dgs:
+                    sep_rgb, sep_depth, sep_opacity, *_ = render_fn(gaussian_mask)
+                else:
+                    sep_rgb, sep_depth, sep_opacity = render_fn(gaussian_mask)
                 outputs["Background_rgb"] = self.affine_transformation(sep_rgb, image_infos)
                 outputs["Background_opacity"] = sep_opacity
                 outputs["Background_depth"] = sep_depth
