@@ -1,0 +1,82 @@
+# ====================================================================================================
+# Development Dockerfile for drivestudio with both 2dgs and 3dgs support (no conda, Python 3.9 + CUDA)
+# ====================================================================================================
+FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
+
+# Avoid interactive tzdata setup
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install basic dependencies
+RUN apt-get update && apt-get install -y \
+    git \
+    python3.9 \
+    python3.9-distutils \
+    python3.9-dev \
+    python3-pip \
+    ffmpeg \
+    cmake \
+    build-essential \
+    libgl1-mesa-glx \
+    libglib2.0-0 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Make Python3.9 the default
+RUN update-alternatives --install /usr/bin/python python /usr/bin/python3.9 1
+
+# Upgrade pip/setuptools/wheel  
+RUN python3.9 -m pip install --upgrade pip setuptools wheel
+
+# Create pip symlink to use python3.9 -m pip
+RUN echo '#!/bin/bash\nexec python3.9 -m pip "$@"' > /usr/local/bin/pip && chmod +x /usr/local/bin/pip
+
+# Set working directory
+WORKDIR /workspace
+
+# Install dependencies
+# First install pinned torch + CUDA wheels
+RUN python3.9 -m pip install \
+    torch==2.0.0+cu118 \
+    torchvision==0.15.0+cu118 \
+    --extra-index-url https://download.pytorch.org/whl/cu118
+
+# Other pip requirements
+RUN python3.9 -m pip install \
+    xformers==0.0.18 \
+    timm==0.9.5 \
+    pytorch_msssim==1.0.0 \
+    omegaconf==2.3.0 \
+    torchmetrics==0.10.3 \
+    tensorboard==2.11.0 \
+    wandb==0.15.8 \
+    matplotlib==3.5.3 \
+    plotly==5.13.1 \
+    viser==0.2.1 \
+    imageio \
+    imageio-ffmpeg \
+    scikit-image==0.20.0 \
+    opencv-python \
+    open3d==0.14.1 \
+    pyquaternion==0.9.9 \
+    chumpy \
+    numpy==1.23.1 \
+    kornia==0.7.2 \
+    tqdm \
+    gdown \
+    nerfview==0.0.3 \
+    lpips==0.1.4 \
+    jupyterlab
+# open3d==0.16.0 \ we need to use 0.14.1 for tsdf integration on cuda (TSDFVoxelGrid class is gone after 0.14.1)
+
+# Set CUDA architectures for building extensions (avoid hardware detection issues)
+# CUDA 11.8 supports up to compute_89 (RTX 40xx series)
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.9"
+ENV FORCE_CUDA=1
+
+# External repos
+# RUN python3.9 -m pip install git+https://github.com/nerfstudio-project/gsplat.git
+RUN python3.9 -m pip install git+https://github.com/albert-yw-lin/gsplat_2dgs.git
+RUN python3.9 -m pip install git+https://github.com/facebookresearch/pytorch3d.git
+RUN python3.9 -m pip install git+https://github.com/NVlabs/nvdiffrast
+
+# Default command (override in compose)
+CMD ["/bin/bash"]

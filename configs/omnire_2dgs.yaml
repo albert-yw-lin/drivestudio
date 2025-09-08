@@ -7,7 +7,7 @@ trainer:
   optim:
     num_iters: 30000
     use_grad_scaler: false
-    cache_buffer_freq: -1
+    cache_buffer_freq: 2000
   render:
     near_plane: 0.1
     far_plane: 10000000000.0
@@ -17,7 +17,7 @@ trainer:
     sparse_grad: false
     batch_size: 1
     # 2DGS specific rendering settings
-    use_2dgs_renderer: true  # Flag to use 2DGS renderer
+    use_2dgs: true  # Flag to use 2DGS renderer
   losses:
     rgb:
       w: 0.8
@@ -27,15 +27,17 @@ trainer:
       w: 0.05
       opacity_loss_type: bce
     depth:
-      w: 0.1
+      w: 0.01
       inverse_depth: False
       normalize: False
       loss_type: l1
     # 2DGS specific losses
-    normal_consistency:
-      w: 0.01  # Weight for normal consistency loss
-    depth_distortion:
-      w: 0.001  # Weight for depth distortion loss
+    normal:
+      w: 0.05          # Normal consistency loss weight
+      start_iter: 7000 # Start normal loss after this iteration
+    distortion:
+      w: 0.01          # Distortion regularization weight
+      start_iter: 3000 # Start distortion loss after this iteration
     affine:
       w: 0.00001
   res_schedule:
@@ -63,11 +65,10 @@ trainer:
     sh_degree_interval: 1000
     n_split_samples: 2
     reset_alpha_value: 0.01
-    # 2DGS adapted thresholds
-    densify_grad_thresh: 0.0003  # Lower threshold for 2D Gaussians
-    densify_size_thresh: 0.003
+    densify_grad_thresh: 0.0002  # match gspalt 2dgs
+    densify_size_thresh: 0.01 # match gspalt 2dgs
     cull_alpha_thresh: 0.005
-    cull_scale_thresh: 0.5
+    cull_scale_thresh: 0.1  # match gspalt 2dgs
     cull_screen_size: 0.15
     split_screen_size: 0.05
     stop_screen_size_at: 5000
@@ -77,24 +78,20 @@ trainer:
 # ------------- Model ------------ #
 model:
   Background:
-    type: models.gaussians.SurfelGaussian  # Use our 2DGS model
+    type: models.gaussians.SurfelGaussians  # Use our 2DGS model
     init:
       from_lidar:
-        num_samples: 800_000
+        num_samples: 600_000
         return_color: True
-      near_randoms: 100_000
-      far_randoms: 100_000
-    ctrl:
-      gaussian_2d: true  # This will be forced to true in Gaussian2DGS
-      depth_ratio: 0  # 0 for mean depth (unbounded), 1 for median (bounded)
+      near_randoms: 200_000
+      far_randoms: 200_200
     reg:
-      # 2DGS specific regularizations
-      lambda_normal: 0.01  # Normal consistency regularization
-      lambda_distortion: 0.001  # Depth distortion regularization
       sharp_shape_reg:
         w: 1.
         step_interval: 10
         max_gauss_ratio: 10.
+      sparse_reg:
+        w: 0.002
   Sky:
     type: models.modules.EnvLight
     params:
@@ -129,10 +126,10 @@ render:
       - front_center_interp # type of trajectory for novel view synthesis
       # - s_curve
     fps: 24 # frames per second for novel view rendering
-    render_background_only: true
+    render_background_only: false # true is only for MultiTrainer
   vis_lidar: False # whether to visualize lidar points on ground truth images
   vis_sky: False # whether to include "rgb_sky" and "rgb_sky_blend" in rendered keys
-  vis_error: False # whether to include "rgb_error_map" in rendered keys
+  vis_error: True # whether to include "rgb_error_map" in rendered keys
 
 # ------------- logging ------------ #
 logging:

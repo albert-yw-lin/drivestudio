@@ -1,9 +1,9 @@
 seed: 0
-dataset: nuscenes/6cams
+dataset: waymo/3cams
 
 # ------------- Trainer ------------ #
 trainer:
-  type: models.trainers.SingleTrainer
+  type: models.trainers.SingleTrainerBackground
   optim:
     num_iters: 40000
     use_grad_scaler: false
@@ -16,6 +16,8 @@ trainer:
     absgrad: true # whether to use absolute gradient for rendering, supported by gsplat kernel
     sparse_grad: false # whether to use sparse gradient for rendering, supported by gsplat kernel
     batch_size: 1 # batch size for rendering, currently only support 1
+    # 2DGS specific rendering settings
+    # use_2dgs: true  # Flag to use 2DGS renderer
   losses:
     rgb:
       w: 0.8
@@ -29,10 +31,17 @@ trainer:
       inverse_depth: False # whether to use inverse depth, NOTE that when set to True, must normalize=True
       normalize: False # whether to normalize depth loss
       loss_type: l1 # choose from ["l1", "l2"]
-    # opacity_entropy:
-    #   w: 0.05
-    # inverse_depth_smoothness:
-    #   w: 0.001
+
+    # # 2DGS specific losses
+    # normal:
+    #   w: 0.05          # Normal consistency loss weight
+    #   start_iter: 7000 # Start normal loss after this iteration
+    # distortion:
+    #   w: 0.01          # Distortion regularization weight
+    #   start_iter: 3000 # Start distortion loss after this iteration
+
+    affine:
+      w: 0.00001 # weight of affine regularization
   res_schedule:
     double_steps: 250 # training starts at 1/d resolution, every n steps this is doubled
     downscale_times: 2 # at the beginning, resolution is 1/2^d, where d is this number
@@ -66,7 +75,7 @@ trainer:
     cull_screen_size: 0.15        # if a gaussian is more than this percent of screen space, cull it
     split_screen_size: 0.05       # if a gaussian is more than this percent of screen space, split it
     stop_screen_size_at: 5000     # stop culling/splitting at this step WRT screen size of gaussians
-    stop_split_at: 30000          # stop splitting at this step
+    stop_split_at: 20000          # stop splitting at this step
     sh_degree: 3                  # sh degree for gaussians
 
 # ------------- Model ------------ #
@@ -84,6 +93,8 @@ model:
         w: 1.
         step_interval: 10
         max_gauss_ratio: 10.       # threshold of ratio of gaussian max to min scale before applying regularization loss from the PhysGaussian paper
+      sparse_reg:
+        w: 0.002
   Sky:
     type: models.modules.EnvLight
     params:
@@ -110,13 +121,15 @@ model:
 
 # ------------- render ------------ #
 render:
-  fps: 10 # frames per second for the main rendered output
+  fps: 16 # frames per second for the main rendered output
   render_full: True # whether to render full resolution videos
   render_test: True # whether to render test set
   render_novel: 
     traj_types:
       - front_center_interp # type of trajectory for novel view synthesis
+      # - s_curve
     fps: 24 # frames per second for novel view rendering
+    # render_background_only: true
   vis_lidar: False # whether to visualize lidar points on ground truth images
   vis_sky: False # whether to include "rgb_sky" and "rgb_sky_blend" in rendered keys
   vis_error: False # whether to include "rgb_error_map" in rendered keys

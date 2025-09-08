@@ -1,7 +1,7 @@
-config_file=configs/omnire_extended_cam_static.yaml
+config_file=configs/paper_legacy/omnire.yaml
 output_root=outputs
 project=nuscenes1
-expname=omnire_background
+expname=omnire_paper_legacy
 dataset=nuscenes/6cams
 scene_idx=1
 start_timestep=0 # start frame index for training

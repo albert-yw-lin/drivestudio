@@ -1,4 +1,4 @@
-from typing import Dict, List, Tuple
+from typing import Dict, List, Tuple, Optional
 from omegaconf import OmegaConf
 import os
 import time
@@ -17,6 +17,13 @@ from torchmetrics.image import PeakSignalNoiseRatio
 from torchmetrics.image.lpip import LearnedPerceptualImagePatchSimilarity
 
 from models.gaussians.basics import *
+
+# for 2dgs
+try:
+    from gsplat.rendering import rasterization_2dgs, rasterization_2dgs_inria_wrapper
+except ImportError:
+    print("Did not import gsplat 2dgs")
+from models.gaussians.surfel import SurfelGaussians
 
 logger = logging.getLogger()
 
@@ -124,7 +131,15 @@ class BasicTrainer(nn.Module):
         
         # a simple viewer for background visualization
         self.viewer = None
-    
+
+        # Add 2DGS configuration
+        self.use_2dgs = self.render_cfg.get("use_2dgs", False)
+
+        if self.use_2dgs:
+            # 2DGS-specific loss configurations
+            self.normal_loss_cfg = self.losses_dict.get("normal", {})
+            self.distortion_loss_cfg = self.losses_dict.get("distortion", {})
+
     @property
     def in_test_set(self):
         return self.cur_frame.item() in self.test_set_indices
@@ -359,16 +374,24 @@ class BasicTrainer(nn.Module):
     
             # collect gaussians
             gs["class_labels"] = torch.full((gs["_means"].shape[0],), self.gaussian_classes[class_name], device=self.device)
-            for k, _ in gs.items():
-                gs_dict[k].append(gs[k])
+            for k, v in gs.items():
+                if k not in gs_dict:
+                    gs_dict[k] = []
+                gs_dict[k].append(v)
         
         for k, v in gs_dict.items():
-            gs_dict[k] = torch.cat(v, dim=0)
+            if len(v) > 0:
+                gs_dict[k] = torch.cat(v, dim=0)
+            else:
+                gs_dict[k] = None
             
         # get the class labels
         self.pts_labels = gs_dict.pop("class_labels")
         if self.render_dynamic_mask:
             self.dynamic_pts_mask = (self.pts_labels != 0).float()
+
+        # Get normals if present (for 2DGS support)
+        normals = gs_dict.get("_normals", None)
 
         gaussians = dataclass_gs(
             _means=gs_dict["_means"],
@@ -376,6 +399,7 @@ class BasicTrainer(nn.Module):
             _quats=gs_dict["_quats"],
             _rgbs=gs_dict["_rgbs"],
             _opacities=gs_dict["_opacities"],
+            _normals=normals,
             detach_keys=[],    # if "means" in detach_keys, then the means will be detached
             extras=None        # to save some extra information (TODO) more flexible way
         )
@@ -383,6 +407,106 @@ class BasicTrainer(nn.Module):
         return gaussians
     
     def render_gaussians(
+        self,
+        gs: dataclass_gs,
+        cam: dataclass_camera,
+        **kwargs
+    ):
+        """
+        Render gaussians with 2DGS support
+        """
+        if self.use_2dgs:
+            return self._render_gaussians_2dgs(
+                gs, cam, **kwargs
+            )
+        else:
+            return self._render_gaussians_3dgs(
+                gs, cam, **kwargs
+            )
+
+    def _render_gaussians_2dgs(
+        self,
+        gs: dataclass_gs,
+        cam: dataclass_camera,
+        **kwargs,
+    ) -> Dict[str, torch.Tensor]:
+        """
+        Render using 2D Gaussian Splatting
+        """
+        
+        def render_fn(opacity_mask=None, return_info=False):
+            # ensure 2DGS's scale is 3D
+            assert gs.scales.shape[1] == 3, f"2DGS scales must be 3D, but instead got {gs.scales.shape[1]}. Go verify"
+            (
+                render_colors,
+                render_alphas, 
+                render_normals,
+                normals_from_depth,
+                render_distort,
+                render_median,
+                info,
+            ) = rasterization_2dgs(
+                means=gs.means,
+                quats=gs.quats,
+                scales=gs.scales,
+                opacities=gs.opacities.squeeze()*opacity_mask if opacity_mask is not None else gs.opacities.squeeze(),
+                colors=gs.rgbs,
+                viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
+                Ks=cam.Ks[None, ...],  # [C, 3, 3]
+                width=cam.W,
+                height=cam.H,
+                packed=self.render_cfg.packed,
+                absgrad=self.render_cfg.absgrad,
+                sparse_grad=self.render_cfg.sparse_grad,
+                distloss=True, # default False, add this to enable distortion loss reg
+                **kwargs,
+            )
+
+            render_colors = render_colors[0]
+            render_alphas = render_alphas[0].squeeze(-1)
+            render_normals = render_normals[0]
+            # normals_from_depth = normals_from_depth[0]
+            # NOTE: rasterization_2dgs's normals_from_depth does not have batch for some reason
+            render_distort = render_distort[0]
+            render_median = render_median[0]
+            
+            assert self.render_cfg.batch_size == 1, "batch size must be 1, will support batch size > 1 in the future"
+
+            assert render_colors.shape[-1] == 4, "The original drivestudio only supports rendering rgb, depth, and alpha. Maybe the code below could be an alternatives. Not tested"
+            # colors = render_colors
+            # depths = render_median.unsqueeze(-1) if render_median is not None else None
+            rendered_rgb, rendered_depth = torch.split(render_colors, [3, 1], dim=-1)
+            if not return_info:
+                return (torch.clamp(rendered_rgb, max=1.0), rendered_depth, render_alphas[..., None], 
+                       render_normals, normals_from_depth, render_distort, render_median)
+            else:
+                return (torch.clamp(rendered_rgb, max=1.0), rendered_depth, render_alphas[..., None], 
+                       render_normals, normals_from_depth, render_distort, render_median, info)
+        
+        # render rgb and opacity with all 2DGS outputs
+        rgb, depth, opacity, normals, normals_from_depth, distortion, median_depth, self.info = render_fn(return_info=True)
+        
+        # Handle gsplat 1.5+ where radii has shape (N, 2) instead of (N, 1)
+        # Take the maximum of the two dimensions to get back to 1D representation
+        if "radii" in self.info and self.info["radii"].dim() == 3 and self.info["radii"].shape[-1] == 2:
+            self.info["radii"] = torch.max(self.info["radii"], dim=-1)[0]
+        
+        results = {
+            "rgb_gaussians": rgb,
+            "depth": depth, 
+            "opacity": opacity,
+            "normals": normals,
+            "normals_from_depth": normals_from_depth,
+            "distortion": distortion,
+            "median_depth": median_depth
+        }
+        
+        if self.training:
+            self.info["means2d"].retain_grad()
+        
+        return results, render_fn
+    
+    def _render_gaussians_3dgs(
         self,
         gs: dataclass_gs,
         cam: dataclass_camera,
@@ -412,7 +536,6 @@ class BasicTrainer(nn.Module):
             
             assert renders.shape[-1] == 4, f"Must render rgb, depth and alpha"
             rendered_rgb, rendered_depth = torch.split(renders, [3, 1], dim=-1)
-            
             if not return_info:
                 return torch.clamp(rendered_rgb, max=1.0), rendered_depth, alphas[..., None]
             else:
@@ -420,6 +543,12 @@ class BasicTrainer(nn.Module):
         
         # render rgb and opacity
         rgb, depth, opacity, self.info = render_fn(return_info=True)
+        
+        # Handle gsplat 1.5+ where radii has shape (N, 2) instead of (N, 1)
+        # Take the maximum of the two dimensions to get back to 1D representation
+        if "radii" in self.info and self.info["radii"].dim() == 3 and self.info["radii"].shape[-1] == 2:
+            self.info["radii"] = torch.max(self.info["radii"], dim=-1)[0]
+        
         results = {
             "rgb_gaussians": rgb,
             "depth": depth, 
@@ -565,6 +694,7 @@ class BasicTrainer(nn.Module):
             loss_dict.update({"depth_loss": depth_loss})
             
         # ----- reg loss -----
+        # NOTE: this is sort of similar to sparse_reg in each models.
         opacity_entropy_reg = self.losses_dict.get("opacity_entropy", None)
         if opacity_entropy_reg is not None:
             pred_opacity = torch.clamp(outputs["opacity"].squeeze(), 1e-6, 1 - 1e-6)
@@ -617,7 +747,71 @@ class BasicTrainer(nn.Module):
             class_reg_loss = self.models[class_name].compute_reg_loss()
             for k, v in class_reg_loss.items():
                 loss_dict[f"{class_name}_{k}"] = v
+        # Add 2DGS-specific losses
+        if self.use_2dgs:
+            # Normal consistency loss
+            if self.normal_loss_cfg.get("w", 0) > 0 and "normals" in outputs and "normals_from_depth" in outputs:
+                normal_loss = self._compute_normal_consistency_loss(
+                    outputs["normals"],
+                    outputs["normals_from_depth"],
+                    outputs.get("opacity", None),
+                    self.step
+                )
+                loss_dict["loss_normal"] = normal_loss * self.normal_loss_cfg.w
+            
+            # Distortion loss
+            if self.distortion_loss_cfg.get("w", 0) > 0 and "distortion" in outputs:
+                dist_loss = self._compute_distortion_loss(
+                    outputs["distortion"],
+                    self.step
+                )
+                loss_dict["loss_distortion"] = dist_loss * self.distortion_loss_cfg.w
+        
         return loss_dict
+    
+    def _compute_normal_consistency_loss(
+        self,
+        normals: torch.Tensor,
+        normals_from_depth: torch.Tensor, 
+        alpha: Optional[torch.Tensor],
+        step: int
+    ) -> torch.Tensor:
+        """
+        Compute normal consistency loss
+        """
+        start_iter = self.normal_loss_cfg.get("start_iter", 7000)
+        if step <= start_iter:
+            return torch.tensor(0.0, device=normals.device)
+        
+        # Apply alpha masking if available
+        if alpha is not None:
+            normals_from_depth = normals_from_depth * alpha
+        
+        # Normalize
+        normals = torch.nn.functional.normalize(normals, dim=-1)
+        normals_from_depth = torch.nn.functional.normalize(normals_from_depth, dim=-1)
+        
+        # Compute cosine similarity
+        cos_sim = (normals * normals_from_depth).sum(dim=-1)
+        
+        # Loss is 1 - cosine similarity
+        normal_error = 1 - cos_sim
+        
+        return normal_error.mean()
+    
+    def _compute_distortion_loss(
+        self,
+        distortion: torch.Tensor,
+        step: int
+    ) -> torch.Tensor:
+        """
+        Compute distortion regularization loss
+        """
+        start_iter = self.distortion_loss_cfg.get("start_iter", 3000)
+        if step <= start_iter:
+            return torch.tensor(0.0, device=distortion.device)
+        
+        return distortion.mean()
     
     def compute_metrics(
         self,
@@ -754,10 +948,15 @@ class BasicTrainer(nn.Module):
                 continue
 
             for k, _ in gs.items():
+                if k not in gs_dict:
+                    gs_dict[k] = []
                 gs_dict[k].append(gs[k])
         
         for k, v in gs_dict.items():
             gs_dict[k] = torch.cat(v, dim=0)
+
+        # Get normals if present (for 2DGS support)
+        normals = gs_dict.get("_normals", None)
 
         gs = dataclass_gs(
             _means=gs_dict["_means"],
@@ -765,24 +964,78 @@ class BasicTrainer(nn.Module):
             _quats=gs_dict["_quats"],
             _rgbs=gs_dict["_rgbs"],
             _opacities=gs_dict["_opacities"],
+            _normals=normals,
             detach_keys=[],
             extras=None
         )
         
-        render_colors, _, _ = rasterization(
-            means=gs.means,
-            quats=gs.quats,
-            scales=gs.scales,
-            opacities=gs.opacities.squeeze(),
-            colors=gs.rgbs,
-            viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
-            Ks=cam.Ks[None, ...],  # [C, 3, 3]
-            width=cam.W,
-            height=cam.H,
-            packed=self.render_cfg.packed,
-            absgrad=self.render_cfg.absgrad,
-            sparse_grad=self.render_cfg.sparse_grad,
-            rasterize_mode="antialiased" if self.render_cfg.antialiased else "classic",
-            radius_clip=4.0,  # skip GSs that have small image radius (in pixels)
-        )
-        return render_colors[0].cpu().numpy()
+        if self.use_2dgs:
+            # Use 2DGS rendering
+            # ensure 2DGS's scale is 3D
+            assert gs.scales.shape[1] == 3, f"2DGS scales must be 3D, but instead got {gs.scales.shape[1]}. Go verify"
+            (
+                render_colors,
+                render_alphas, 
+                render_normals,
+                normals_from_depth,
+                render_distort,
+                render_median,
+                info,
+            ) = rasterization_2dgs(
+                means=gs.means,
+                quats=gs.quats,
+                scales=gs.scales,
+                opacities=gs.opacities.squeeze(),
+                colors=gs.rgbs,
+                viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
+                Ks=cam.Ks[None, ...],  # [C, 3, 3]
+                width=cam.W,
+                height=cam.H,
+                packed=self.render_cfg.packed,
+                absgrad=self.render_cfg.absgrad,
+                sparse_grad=self.render_cfg.sparse_grad,
+                radius_clip=4.0,  # skip GSs that have small image radius (in pixels)
+            )
+            
+            render_colors = render_colors[0]
+            # Handle different 2DGS output formats
+            if render_colors.shape[-1] == 4:
+                # RGB + depth format
+                rendered_rgb, rendered_depth = torch.split(render_colors, [3, 1], dim=-1)
+                render_colors = torch.clamp(rendered_rgb, max=1.0)
+            elif render_colors.shape[-1] == 3:
+                # RGB only format, use median depth separately if available
+                render_colors = torch.clamp(render_colors, max=1.0)
+            else:
+                raise ValueError(f"Unexpected render_colors shape: {render_colors.shape}")
+        else:
+            # Use 3DGS rendering
+            render_colors, _, _ = rasterization(
+                means=gs.means,
+                quats=gs.quats,
+                scales=gs.scales,
+                opacities=gs.opacities.squeeze(),
+                colors=gs.rgbs,
+                viewmats=torch.linalg.inv(cam.camtoworlds)[None, ...],  # [C, 4, 4]
+                Ks=cam.Ks[None, ...],  # [C, 3, 3]
+                width=cam.W,
+                height=cam.H,
+                packed=self.render_cfg.packed,
+                absgrad=self.render_cfg.absgrad,
+                sparse_grad=self.render_cfg.sparse_grad,
+                rasterize_mode="antialiased" if self.render_cfg.antialiased else "classic",
+                radius_clip=4.0,  # skip GSs that have small image radius (in pixels)
+            )
+            render_colors = render_colors[0]
+            # Handle different 3DGS output formats
+            if render_colors.shape[-1] == 4:
+                # RGB + depth format
+                rendered_rgb, rendered_depth = torch.split(render_colors, [3, 1], dim=-1)
+                render_colors = torch.clamp(rendered_rgb, max=1.0)
+            elif render_colors.shape[-1] == 3:
+                # RGB only format
+                render_colors = torch.clamp(render_colors, max=1.0)
+            else:
+                raise ValueError(f"Unexpected render_colors shape: {render_colors.shape}")
+        
+        return render_colors.cpu().numpy()

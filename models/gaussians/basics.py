@@ -5,7 +5,7 @@ import torch
 from numpy.typing import NDArray
 
 from typing import Dict, List, Optional, Union
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, fields, field
 from sklearn.neighbors import NearestNeighbors
 from pytorch3d.transforms import matrix_to_quaternion
 
@@ -139,7 +139,8 @@ class dataclass_gs:
     _rgbs: torch.Tensor
     _scales: torch.Tensor
     _quats: torch.Tensor
-    detach_keys: List[str]
+    _normals: Optional[torch.Tensor] = None  # Add normals for 2DGS support
+    detach_keys: List[str] = field(default_factory=list)
     extras: Optional[Dict[str, torch.Tensor]] = None
     def set_grad_controller(self, detach_keys):
         self.detach_keys = detach_keys
@@ -173,6 +174,13 @@ class dataclass_gs:
             return self._quats.detach()
         else:
             return self._quats
+    
+    @property
+    def normals(self):
+        if "normals" in self.detach_keys:
+            return self._normals.detach() if self._normals is not None else None
+        else:
+            return self._normals
         
 def remove_from_optim(optimizer, deleted_mask, param_dict):
     """removes the deleted_mask from the optimizer provided"""

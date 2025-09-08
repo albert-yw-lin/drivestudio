@@ -171,6 +171,64 @@ def do_evaluation(
                 render_background_only=render_novel_cfg.get("render_background_only", False)
             )
             logger.info(f"Saved novel view video for trajectory type: {traj_type} to {save_path}")
+
+def extract_background_mesh(
+    trainer,
+    dataset,
+    save_dir: str,
+    num_views: int = None,
+    voxel_size: float = None,
+    depth_threshold: float = None
+):
+    """Extract mesh specifically from Background gaussians"""
+    from utils.mesh_extractor import BackgroundMeshExtractor
+    import open3d as o3d
+    
+    # Check if trainer is MultiTrainer and has Background model
+    if not hasattr(trainer, 'gaussian_classes'):
+        logger.warning("Trainer does not have gaussian_classes, skipping mesh extraction")
+        return None
+    
+    if "Background" not in trainer.gaussian_classes:
+        logger.warning("No Background model found in trainer, skipping mesh extraction")
+        return None
+    
+    logger.info("Extracting mesh from Background gaussians...")
+    
+    # Create mesh extractor
+    extractor = BackgroundMeshExtractor(scene_scale=trainer.scene_radius)
+    
+    # Extract depth maps from Background only
+    extractor.extract_background_depths_from_trainer(
+        trainer=trainer,
+        dataset=dataset,
+        num_views=num_views,
+        camera_downscale=2
+    )
+    
+    # Extract mesh using TSDF
+    mesh = extractor.extract_mesh_tsdf(
+        voxel_size=voxel_size,
+        depth_threshold=depth_threshold  # Can filter out far depths (sky)
+    )
+    
+    # Post-process mesh
+    mesh_clean = extractor.post_process_mesh(mesh, min_cluster_size=50)
+    
+    # Save meshes
+    os.makedirs(save_dir, exist_ok=True)
+    mesh_path = os.path.join(save_dir, "background_mesh_raw.ply")
+    mesh_clean_path = os.path.join(save_dir, "background_mesh_clean.ply")
+    
+    o3d.io.write_triangle_mesh(mesh_path, mesh)
+    o3d.io.write_triangle_mesh(mesh_clean_path, mesh_clean)
+    
+    logger.info(f"Saved raw Background mesh to {mesh_path}")
+    logger.info(f"Saved cleaned Background mesh to {mesh_clean_path}")
+    logger.info(f"Raw mesh: {len(mesh.vertices)} vertices, {len(mesh.triangles)} faces")
+    logger.info(f"Clean mesh: {len(mesh_clean.vertices)} vertices, {len(mesh_clean.triangles)} faces")
+    
+    return mesh_clean
             
 def main(args):
     log_dir = os.path.dirname(args.resume_from)
@@ -205,64 +263,85 @@ def main(args):
         f"Resuming training from {args.resume_from}, starting at step {trainer.step}"
     )
 
-    # Export Gaussian models to PLY format
+    # Extract Background mesh if requested
+    if args.extract_mesh:
+        mesh_dir = os.path.join(log_dir, "mesh_exports")
+        extract_background_mesh(
+            trainer=trainer,
+            dataset=dataset,
+            save_dir=mesh_dir,
+            num_views=args.mesh_num_views,
+            voxel_size=args.mesh_voxel_size,
+            depth_threshold=args.mesh_depth_threshold
+        )
+
+    # clean up cuda cache
+    torch.cuda.empty_cache()
+
+    # Export Background Gaussian to PLY format
     if args.export_ply:
-        logger.info("Exporting Gaussian models to PLY format...")
+        logger.info("Exporting Background Gaussian to PLY format...")
         ply_output_dir = os.path.join(log_dir, "ply_exports")
         os.makedirs(ply_output_dir, exist_ok=True)
+
+        model = trainer.models["Background"]
+        export_gaussians_to_ply(model, ply_output_dir, name = "background.ply")
+        logger.info(f"Exported background model to {ply_output_dir}/background.ply")
+
+        # Use this if you were to export all Gaussian models in the trainer
+        # for model_name, model in trainer.models.items():
+        #     if hasattr(model, '_means'):  # Check if it's a Gaussian model
+        #         ply_filename = f"{model_name}_gaussians.ply"
+        #         try:
+        #             export_gaussians_to_ply(model, ply_output_dir, ply_filename)
+        #             logger.info(f"Exported {model_name} model to {os.path.join(ply_output_dir, ply_filename)}")
+        #         except Exception as e:
+        #             logger.error(f"Failed to export {model_name} model: {e}")
+    
+    if args.render_video:
+        logger.info("Rendering video from Gaussian models...")
+        if args.enable_viewer:
+            # a simple viewer for background visualization
+            trainer.init_viewer(port=args.viewer_port)
         
-        for model_name, model in trainer.models.items():
-            if hasattr(model, '_means'):  # Check if it's a Gaussian model
-                ply_filename = f"{model_name}_gaussians.ply"
-                try:
-                    export_gaussians_to_ply(model, ply_output_dir, ply_filename)
-                    logger.info(f"Exported {model_name} model to {os.path.join(ply_output_dir, ply_filename)}")
-                except Exception as e:
-                    logger.error(f"Failed to export {model_name} model: {e}")
-    
-    
-    if args.enable_viewer:
-        # a simple viewer for background visualization
-        trainer.init_viewer(port=args.viewer_port)
-    
-    # define render keys
-    render_keys = [
-        "gt_rgbs",
-        # "rgbs",
-        "Background_rgbs",
-        # "RigidNodes_rgbs",
-        # "DeformableNodes_rgbs",
-        # "SMPLNodes_rgbs",
-        # "depths",
-        "Background_depths",
-        # "RigidNodes_depths",
-        # "DeformableNodes_depths",
-        # "SMPLNodes_depths",
-        # "mask"
-    ]
-    if cfg.render.vis_lidar:
-        render_keys.insert(0, "lidar_on_images")
-    if cfg.render.vis_sky:
-        render_keys += ["rgb_sky_blend", "rgb_sky"]
-    if cfg.render.vis_error:
-        render_keys.insert(render_keys.index("rgbs") + 1, "rgb_error_maps")
-    
-    if args.save_catted_videos:
-        cfg.logging.save_seperate_video = False
-    
-    do_evaluation(
-        step=trainer.step,
-        cfg=cfg,
-        trainer=trainer,
-        dataset=dataset,
-        render_keys=render_keys,
-        args=args,
-        post_fix="_eval"
-    )
-    
-    if args.enable_viewer:
-        print("Viewer running... Ctrl+C to exit.")
-        time.sleep(1000000)
+        # define render keys
+        render_keys = [
+            "gt_rgbs",
+            "rgbs",
+            # "Background_rgbs",
+            # "RigidNodes_rgbs",
+            # "DeformableNodes_rgbs",
+            # "SMPLNodes_rgbs",
+            "depths",
+            # "Background_depths",
+            # "RigidNodes_depths",
+            # "DeformableNodes_depths",
+            # "SMPLNodes_depths",
+            "mask"
+        ]
+        if cfg.render.vis_lidar:
+            render_keys.insert(0, "lidar_on_images")
+        if cfg.render.vis_sky:
+            render_keys += ["rgb_sky_blend", "rgb_sky"]
+        if cfg.render.vis_error:
+            render_keys.insert(render_keys.index("rgbs") + 1, "rgb_error_maps")
+        
+        if args.save_catted_videos:
+            cfg.logging.save_seperate_video = False
+        
+        do_evaluation(
+            step=trainer.step,
+            cfg=cfg,
+            trainer=trainer,
+            dataset=dataset,
+            render_keys=render_keys,
+            args=args,
+            post_fix="_eval"
+        )
+        
+        if args.enable_viewer:
+            print("Viewer running... Ctrl+C to exit.")
+            time.sleep(1000000)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser("Train Gaussian Splatting for a single scene")    
@@ -271,10 +350,17 @@ if __name__ == "__main__":
     parser.add_argument("--render_video_postfix", type=str, default=None, help="an optional postfix for video")    
     parser.add_argument("--save_catted_videos", type=bool, default=False, help="visualize lidar on image")
     parser.add_argument("--export_ply", action="store_true", help="export Gaussian models to PLY format")
+    parser.add_argument("--render_video", action="store_true", help="render video from Gaussian models")
 
+    # mesh extraction
+    parser.add_argument("--extract_mesh", action="store_true", help="Extract mesh from Background gaussians using TSDF")
+    parser.add_argument("--mesh_num_views", type=int, default=None, help="Number of views for mesh extraction")
+    parser.add_argument("--mesh_voxel_size", type=float, default=0.05, help="Voxel size for TSDF (auto if None)")
+    parser.add_argument("--mesh_depth_threshold", type=float, default=None, help="Max depth to consider (filters sky)")
+    
     # viewer
     parser.add_argument("--enable_viewer", action="store_true", help="enable viewer")
-    parser.add_argument("--viewer_port", type=int, default=8080, help="viewer port")
+    parser.add_argument("--viewer_port", type=int, default=8888, help="viewer port")
         
     # misc
     parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
