@@ -143,7 +143,7 @@ class BackgroundMeshExtractor:
         depth_threshold: float = None,
         use_cuda: bool = True,
         block_resolution: int = 16,
-        block_count: int = 300000
+        block_count: int = 400000
     ):
         """Extract mesh using TSDF fusion
         
@@ -286,7 +286,7 @@ class BackgroundMeshExtractor:
         print(f"Extracted mesh: {len(mesh.vertices)} vertices, {len(mesh.triangles)} faces")
         return mesh
     
-    def post_process_mesh(self, mesh, min_cluster_size: int = 50):
+    def post_process_mesh(self, mesh, min_cluster_size: int = 30):
         """Remove small disconnected components"""
         import copy
         mesh_clean = copy.deepcopy(mesh)
