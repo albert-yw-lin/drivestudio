@@ -1,6 +1,6 @@
-# ======================================================================
-# Development Dockerfile for drivestudio (no conda, Python 3.9 + CUDA)
-# ======================================================================
+# ====================================================================================================
+# Development Dockerfile for drivestudio with both 2dgs and 3dgs support (no conda, Python 3.9 + CUDA)
+# ====================================================================================================
 FROM nvidia/cuda:11.8.0-cudnn8-devel-ubuntu20.04
 
 # Avoid interactive tzdata setup
@@ -55,7 +55,6 @@ RUN python3.9 -m pip install \
     imageio-ffmpeg \
     scikit-image==0.20.0 \
     opencv-python \
-    # open3d==0.16.0 \ we need to use 0.14.1 for tsdf integration on cuda (TSDFVoxelGrid class is gone after 0.14.1)
     open3d==0.14.1 \
     pyquaternion==0.9.9 \
     chumpy \
@@ -66,6 +65,7 @@ RUN python3.9 -m pip install \
     nerfview==0.0.3 \
     lpips==0.1.4 \
     jupyterlab
+# open3d==0.16.0 \ we need to use 0.14.1 for tsdf integration on cuda (TSDFVoxelGrid class is gone after 0.14.1)
 
 # Set CUDA architectures for building extensions (avoid hardware detection issues)
 # CUDA 11.8 supports up to compute_89 (RTX 40xx series)
