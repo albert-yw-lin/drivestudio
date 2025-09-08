@@ -105,8 +105,7 @@ def setup(args):
 
 def main(args):
     cfg = setup(args)
-    breakpoint()
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # build dataset
     dataset = DrivingDataset(data_cfg=cfg.data)

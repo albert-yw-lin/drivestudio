@@ -1,7 +1,7 @@
 config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
 output_root=outputs
 project=pandaset001
-expname=omnire_extended_cam_2dgs_background_only_distortion_100
+expname=omnire_extended_cam_2dgs_background_only_no_distortion
 dataset=pandaset/6cams
 scene_idx=1
 start_timestep=0 # start frame index for training

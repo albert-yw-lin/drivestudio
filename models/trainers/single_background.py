@@ -30,6 +30,9 @@ class SingleTrainerBackground(BasicTrainer):
         self.num_timesteps = num_timesteps
         super().__init__(**kwargs)
 
+        # align behavior with MultiTrainer so external utilities can toggle it
+        self.render_each_class = True
+
         self._is_2dgs_model()
 
     def _is_2dgs_model(self):
@@ -42,7 +45,7 @@ class SingleTrainerBackground(BasicTrainer):
                 logger.info(f"Detected 2DGS model: {model_name}")
                 assert self.render_cfg["use_2dgs"], "the yaml has to have this argument set to True"
                 assert "normal" in self.losses_dict
-                assert "distortion" in self.losses_dict
+                # assert "distortion" in self.losses_dict
                 assert "densify_grad_thresh" in self.gaussian_ctrl_general_cfg
                 logger.info("Configured rendering for 2DGS")
                 break
@@ -218,7 +221,7 @@ class SingleTrainerBackground(BasicTrainer):
         )
 
         # render gaussians
-        outputs, _ = self.render_gaussians(
+        outputs, render_fn = self.render_gaussians(
             gs=gs,
             cam=processed_cam,
             near_plane=self.render_cfg.near_plane,
@@ -236,6 +239,15 @@ class SingleTrainerBackground(BasicTrainer):
         outputs["rgb"] = self.affine_transformation(
             outputs["rgb_gaussians"] + outputs["rgb_sky"] * (1.0 - outputs["opacity"]), image_infos
         )
+        
+        # optional per-class outputs (useful for mesh extraction)
+        if not self.training and self.render_each_class:
+            with torch.no_grad():
+                gaussian_mask = self.pts_labels == self.gaussian_classes["Background"]
+                sep_rgb, sep_depth, sep_opacity = render_fn(gaussian_mask)
+                outputs["Background_rgb"] = self.affine_transformation(sep_rgb, image_infos)
+                outputs["Background_opacity"] = sep_opacity
+                outputs["Background_depth"] = sep_depth
         
         return outputs
         
