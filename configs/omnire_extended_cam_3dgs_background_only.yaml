@@ -93,8 +93,8 @@ model:
         w: 1.
         step_interval: 10
         max_gauss_ratio: 10.       # threshold of ratio of gaussian max to min scale before applying regularization loss from the PhysGaussian paper
-      # sparse_reg:
-      #   w: 0.002
+      sparse_reg:
+        w: 0.002
   Sky:
     type: models.modules.EnvLight
     params:
