@@ -28,17 +28,6 @@ def set_seeds(seed=31):
     np.random.seed(seed)
     random.seed(seed)
 
-def check_gpu_availability():
-    """
-    Check available GPUs and their memory usage.
-    """
-    if not torch.cuda.is_available():
-        print("CUDA is not available")
-        return
-    
-    num_gpus = torch.cuda.device_count()
-    print(f"Available GPUs: {num_gpus}")
-
 def setup(args):
     # get config
     cfg = OmegaConf.load(args.config_file)
@@ -116,24 +105,7 @@ def setup(args):
 
 def main(args):
     cfg = setup(args)
-    
-    # Check GPU availability
-    check_gpu_availability()
-    
-    # Set GPU device
-    if torch.cuda.is_available():
-        if args.gpu_id is not None:
-            if args.gpu_id >= torch.cuda.device_count():
-                raise ValueError(f"GPU {args.gpu_id} not available. Available GPUs: 0-{torch.cuda.device_count()-1}")
-            device = torch.device(f"cuda:{args.gpu_id}")
-            # torch.cuda.set_device(args.gpu_id)
-            logger.info(f"Using GPU {args.gpu_id}")
-        else:
-            device = torch.device("cuda:0")
-            logger.info(f"Using default GPU (cuda:0)")
-    else:
-        device = torch.device("cpu")
-        logger.info("CUDA not available, using CPU")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     # build dataset
     dataset = DrivingDataset(data_cfg=cfg.data)
@@ -396,9 +368,6 @@ if __name__ == "__main__":
     # viewer
     parser.add_argument("--enable_viewer", action="store_true", help="enable viewer")
     parser.add_argument("--viewer_port", type=int, default=8080, help="viewer port")
-    
-    # gpu selection
-    parser.add_argument("--gpu_id", type=int, default=None, help="GPU ID to use (0, 1, 2, 3, etc.). If not specified, uses default GPU")
     
     # misc
     parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)

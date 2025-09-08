@@ -140,7 +140,10 @@ class BackgroundMeshExtractor:
         voxel_size: float = 0.05, # emperically tuned number
         sdf_trunc: float = None,
         depth_trunc: float = None,
-        depth_threshold: float = None
+        depth_threshold: float = None,
+        use_cuda: bool = True,
+        block_resolution: int = 16,
+        block_count: int = 300000
     ):
         """Extract mesh using TSDF fusion
         
@@ -149,6 +152,9 @@ class BackgroundMeshExtractor:
             sdf_trunc: Truncation distance for SDF
             depth_trunc: Maximum depth range for integration
             depth_threshold: Optional minimum depth threshold to filter out sky
+            use_cuda: If True and CUDA is available in Open3D, use GPU TSDF
+            block_resolution: TSDF voxel block resolution for GPU backend
+            block_count: Number of voxel blocks to allocate on GPU
         """
         
         # Auto-compute parameters if not provided
@@ -158,7 +164,7 @@ class BackgroundMeshExtractor:
         if sdf_trunc is None:
             sdf_trunc = voxel_size * 5
         if depth_trunc is None:
-            depth_trunc = self.radius*2
+            depth_trunc = self.radius * 2
             
         print(f"TSDF Fusion Parameters:")
         print(f"  voxel_size: {voxel_size:.4f}")
@@ -166,14 +172,87 @@ class BackgroundMeshExtractor:
         print(f"  depth_trunc: {depth_trunc:.2f}")
         print(f"  scene_radius: {self.radius:.2f}")
         
-        # Create TSDF volume
+        # Prefer Open3D Tensor (GPU) if available
+        use_o3d_tensor = (
+            use_cuda
+            and hasattr(o3d, "t")
+            and hasattr(o3d, "core")
+            and getattr(o3d.core, "cuda", None) is not None
+            and o3d.core.cuda.is_available()
+        )
+        print(f"Using Open3D Tensor: {use_o3d_tensor}")
+
+        if use_o3d_tensor:
+            device = o3d.core.Device("CUDA:0")
+            tsdf = o3d.t.geometry.TSDFVoxelGrid(
+                voxel_size=voxel_size,
+                sdf_trunc=sdf_trunc,
+                block_resolution=block_resolution,
+                block_count=block_count,
+                device=device,
+            )
+
+            # Integrate all views (CUDA)
+            for i, (depth, rgb, cam) in enumerate(tqdm(
+                zip(self.depthmaps, self.rgbmaps, self.cameras),
+                desc="TSDF integration (CUDA)", total=len(self.depthmaps)
+            )):
+                # Optional: threshold depth to remove far away points (sky)
+                if depth_threshold is not None:
+                    d = depth.clone()
+                    d[d > depth_threshold] = 0
+                else:
+                    d = depth
+
+                # Prepare images: depth (H,W,1) float32 meters, color (H,W,3) uint8
+                depth_np = d.cpu().numpy().astype(np.float32)
+                if depth_np.ndim == 2:
+                    depth_np = depth_np[..., None]
+                color_np = np.clip(rgb.cpu().numpy(), 0, 1)
+                if color_np.ndim == 3 and color_np.shape[0] in (3, 4):
+                    color_np = np.transpose(color_np[:3], (1, 2, 0))
+                color_np = (color_np * 255.0).astype(np.uint8, copy=False)
+
+                depth_img = o3d.t.geometry.Image(o3d.core.Tensor(depth_np, o3d.core.Dtype.Float32, device))
+                color_img = o3d.t.geometry.Image(o3d.core.Tensor(color_np, o3d.core.Dtype.UInt8, device))
+
+                # Intrinsics/extrinsics
+                fx, fy = cam.Ks[0, 0].item(), cam.Ks[1, 1].item()
+                cx, cy = cam.Ks[0, 2].item(), cam.Ks[1, 2].item()
+                intr = o3d.core.Tensor(
+                    [[fx, 0.0, cx],
+                     [0.0, fy, cy],
+                     [0.0, 0.0, 1.0]],
+                    o3d.core.Dtype.Float64, device
+                )
+                world2cam = torch.linalg.inv(cam.camtoworlds)
+                extr = o3d.core.Tensor(world2cam.cpu().numpy(), o3d.core.Dtype.Float64, device)
+
+                tsdf.integrate(
+                    depth_img,
+                    color_img,
+                    intr,
+                    extr,
+                    depth_scale=1.0,
+                    depth_max=float(depth_trunc),
+                )
+
+            # Extract mesh on GPU, convert to legacy and return
+            mesh_t = tsdf.extract_surface_mesh()
+            mesh = mesh_t.to_legacy()
+            mesh.compute_vertex_normals()
+            print(f"Extracted mesh (CUDA): {len(mesh.vertices)} vertices, {len(mesh.triangles)} faces")
+            return mesh
+
+        print("Using legacy CPU TSDF")
+        # Fallback: legacy CPU TSDF
         volume = o3d.pipelines.integration.ScalableTSDFVolume(
             voxel_length=voxel_size,
             sdf_trunc=sdf_trunc,
             color_type=o3d.pipelines.integration.TSDFVolumeColorType.RGB8
         )
         
-        # Integrate all views
+        # Integrate all views (CPU)
         for i, (depth, rgb, cam) in enumerate(tqdm(
             zip(self.depthmaps, self.rgbmaps, self.cameras),
             desc="TSDF integration", total=len(self.depthmaps)
@@ -185,7 +264,6 @@ class BackgroundMeshExtractor:
                 depth_np = depth.numpy()
                 depth_np[depth_np > depth_threshold] = 0
                 depth = torch.from_numpy(depth_np)
-            # breakpoint()
             # Create RGBD image
             rgbd = o3d.geometry.RGBDImage.create_from_color_and_depth(
                 o3d.geometry.Image(

@@ -275,6 +275,9 @@ def main(args):
             depth_threshold=args.mesh_depth_threshold
         )
 
+    # clean up cuda cache
+    torch.cuda.empty_cache()
+
     # Export Background Gaussian to PLY format
     if args.export_ply:
         logger.info("Exporting Background Gaussian to PLY format...")

@@ -17,7 +17,7 @@ trainer:
     sparse_grad: false # whether to use sparse gradient for rendering, supported by gsplat kernel
     batch_size: 1 # batch size for rendering, currently only support 1
     # 2DGS specific rendering settings
-    use_2dgs: true  # Flag to use 2DGS renderer
+    # use_2dgs: true  # Flag to use 2DGS renderer
   losses:
     rgb:
       w: 0.8
@@ -32,10 +32,10 @@ trainer:
       normalize: False # whether to normalize depth loss
       loss_type: l1 # choose from ["l1", "l2"]
 
-    # 2DGS specific losses
-    normal:
-      w: 0.05          # Normal consistency loss weight
-      start_iter: 7000 # Start normal loss after this iteration
+    # # 2DGS specific losses
+    # normal:
+    #   w: 0.05          # Normal consistency loss weight
+    #   start_iter: 7000 # Start normal loss after this iteration
     # distortion:
     #   w: 0.01          # Distortion regularization weight
     #   start_iter: 3000 # Start distortion loss after this iteration
@@ -81,7 +81,7 @@ trainer:
 # ------------- Model ------------ #
 model:
   Background:
-    type: models.gaussians.SurfelGaussians
+    type: models.gaussians.VanillaGaussians
     init:
       from_lidar:
         num_samples: 800_000
@@ -93,8 +93,8 @@ model:
         w: 1.
         step_interval: 10
         max_gauss_ratio: 10.       # threshold of ratio of gaussian max to min scale before applying regularization loss from the PhysGaussian paper
-      # sparse_reg:
-      #   w: 0.002
+      sparse_reg:
+        w: 0.002
   Sky:
     type: models.modules.EnvLight
     params:
