@@ -335,14 +335,16 @@ def main(args):
     
     logger.info("Training done!")
 
-    do_evaluation(
-        step=step,
-        cfg=cfg,
-        trainer=trainer,
-        dataset=dataset,
-        render_keys=render_keys,
-        args=args,
-    )
+    if args.enable_eval:
+        logger.info("Starting evaluation after training...")
+        do_evaluation(
+            step=step,
+            cfg=cfg,
+            trainer=trainer,
+            dataset=dataset,
+            render_keys=render_keys,
+            args=args,
+        )
     
     if args.enable_viewer:
         print("Viewer running... Ctrl+C to exit.")
@@ -368,7 +370,10 @@ if __name__ == "__main__":
     # viewer
     parser.add_argument("--enable_viewer", action="store_true", help="enable viewer")
     parser.add_argument("--viewer_port", type=int, default=8080, help="viewer port")
-    
+
+    # evaluation
+    parser.add_argument("--enable_eval", action="store_true", help="run evaluation after training")
+
     # misc
     parser.add_argument("opts", help="Modify config options using the command-line", default=None, nargs=argparse.REMAINDER)
     

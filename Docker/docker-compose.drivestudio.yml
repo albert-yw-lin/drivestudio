@@ -39,12 +39,12 @@ services:
 # docker compose -f Docker/docker-compose.drivestudio.yml build
 
 # Start the containers:
-# docker compose -f Docker/docker-compose.drivestudio.yml up -d ds-2dgs
+# docker compose -f Docker/docker-compose.drivestudio.yml up -d drivestudio
 # docker compose -f Docker/docker-compose.drivestudio.yml up -d ds-segformer
 
 # Run the containers (every time):
-# docker exec -it driestudio bash
-# docker exec -it segformer bash
+# docker exec -it drivestudio bash
+# docker exec -it ds-segformer bash
 
 # Build and start both services:
 # docker compose -f Docker/docker-compose.drivestudio.yml up -d
