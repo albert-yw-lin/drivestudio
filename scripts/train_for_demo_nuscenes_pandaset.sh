@@ -39,57 +39,57 @@ project=final_demo
 start_timestep=0 # start frame index for training
 end_timestep=-1 # end frame index, -1 for the last frame
 
-# nuscenes0
-dataset=nuscenes/6cams
-scene_idx=0
+# # nuscenes0
+# dataset=nuscenes/6cams
+# scene_idx=0
 
-config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
-expname=nuscenes0_2d
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+# config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
+# expname=nuscenes0_2d
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
-config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
-expname=nuscenes0_3d
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+# config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
+# expname=nuscenes0_3d
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
-# dataset=waymo/5cams_no_smpl
+# # dataset=waymo/5cams_no_smpl
 
-config_file=configs/omnire_extended_cam.yaml
-expname=nuscenes0_3d_full
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
-
-
+# config_file=configs/omnire_extended_cam.yaml
+# expname=nuscenes0_3d_full
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
 
-# nuscenes3
-dataset=nuscenes/6cams
-scene_idx=3
 
-config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
-expname=nuscenes3_2d
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
-config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
-expname=nuscenes3_3d
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+# # nuscenes3
+# dataset=nuscenes/6cams
+# scene_idx=3
 
-# dataset=waymo/5cams_no_smpl
+# config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
+# expname=nuscenes3_2d
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
-config_file=configs/omnire_extended_cam.yaml
-expname=nuscenes3_3d_full
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+# config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
+# expname=nuscenes3_3d
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+
+# # dataset=waymo/5cams_no_smpl
+
+# config_file=configs/omnire_extended_cam.yaml
+# expname=nuscenes3_3d_full
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
 
 # pandaset5
 dataset=pandaset/6cams
 scene_idx=5
 
-config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
-expname=pandaset5_2d
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+# config_file=configs/omnire_extended_cam_2dgs_background_only.yaml
+# expname=pandaset5_2d
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
-config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
-expname=pandaset5_3d
-run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
+# config_file=configs/omnire_extended_cam_3dgs_background_only.yaml
+# expname=pandaset5_3d
+# run_training "$config_file" "$expname" "$dataset" "$scene_idx" "$start_timestep" "$end_timestep" "$output_root" "$project"
 
 # dataset=waymo/5cams_no_smpl
 
