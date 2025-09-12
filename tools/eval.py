@@ -308,15 +308,15 @@ def main(args):
         render_keys = [
             "gt_rgbs",
             "rgbs",
-            # "Background_rgbs",
-            # "RigidNodes_rgbs",
-            # "DeformableNodes_rgbs",
-            # "SMPLNodes_rgbs",
+            "Background_rgbs",
+            "RigidNodes_rgbs",
+            "DeformableNodes_rgbs",
+            "SMPLNodes_rgbs",
             "depths",
-            # "Background_depths",
-            # "RigidNodes_depths",
-            # "DeformableNodes_depths",
-            # "SMPLNodes_depths",
+            "Background_depths",
+            "RigidNodes_depths",
+            "DeformableNodes_depths",
+            "SMPLNodes_depths",
             "mask"
         ]
         if cfg.render.vis_lidar:

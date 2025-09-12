@@ -277,7 +277,7 @@ def main():
                        help="Last frame to include (default: -1 for all)")
     parser.add_argument("--no_color", action="store_true",
                        help="Don't write colors (ignore intensity)")
-    parser.add_argument("--intensity_only", action="store_true",
+    parser.add_argument("--intensity", action="store_true",
                        help="Write a single float intensity per point instead of RGB")
     parser.add_argument("--no_alignment", action="store_true",
                        help="Don't apply ego pose alignment (sourceloader does)")
@@ -292,7 +292,7 @@ def main():
         start_frame=args.start_frame,
         end_frame=args.end_frame,
         enable_color=not args.no_color,
-        intensity_only=args.intensity_only,
+        intensity_only=args.intensity,
         apply_alignment=not args.no_alignment
     )
 

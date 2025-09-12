@@ -13,7 +13,6 @@ python -m tools.train \
     --output_root $output_root \
     --project $project \
     --run_name $expname \
-    --gpu_id 0 \
     dataset=$dataset \
     data.scene_idx=$scene_idx \
     data.start_timestep=$start_timestep \
